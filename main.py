@@ -62,7 +62,7 @@ def main():
     parser.add_argument("--device", default=None,
                         help="Device: cpu, cuda, auto")
     parser.add_argument("--llm-provider", default=None,
-                        help="LLM provider: gemini, none")
+                        help="LLM provider: nim, gemini, none")
     parser.add_argument("--no-residual", action="store_true",
                         help="Disable residual delta learning")
     args = parser.parse_args()

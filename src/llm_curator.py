@@ -90,9 +90,11 @@ class LLMCurator:
         self.temperature = config.get("temperature", 0.1)
         self.max_tokens = config.get("max_tokens", 1024)
         self.rate_limit_delay = config.get("rate_limit_delay", 0.5)
-        self.max_retries = config.get("max_retries", 3)
+        self.max_retries = config.get("max_retries", 5)
         self.fallback_config = config.get("fallback", {})
         self.log_path = log_path
+        self.call_count = 0
+        self.print_frequency = config.get("print_frequency", 10)
 
         self._client = None
         if self.provider == "gemini":
@@ -129,11 +131,25 @@ class LLMCurator:
                     )
                     text = response.text
                     _log_prompt(stage, topic_id, prompt, text, self.log_path)
+                    
+                    self.call_count += 1
+                    if self.call_count % self.print_frequency == 0:
+                        print(f"\n    --- Sampled LLM Call ({stage} topic {topic_id}) ---")
+                        print(f"    Prompt snippet: {prompt.strip()[:150].replace(chr(10), ' ')}...")
+                        print(f"    Response: {text.strip().replace(chr(10), ' ')}")
+                        print(f"    --------------------------------------------------\n")
+                        
                     time.sleep(self.rate_limit_delay)
                     return text
                 except Exception as e:
-                    print(f"    LLM call failed (attempt {attempt+1}): {e}")
-                    time.sleep(2 ** attempt)
+                    error_msg = str(e)
+                    print(f"    LLM call failed (attempt {attempt+1}/{self.max_retries}): {e}")
+                    if "429" in error_msg or "ResourceExhausted" in error_msg or "quota" in error_msg.lower():
+                        sleep_time = (2 ** attempt) * 15 + self.rate_limit_delay
+                        print(f"    Rate limit reached. Sleeping for {sleep_time} seconds...")
+                        time.sleep(sleep_time)
+                    else:
+                        time.sleep(2 ** attempt)
             _log_prompt(stage, topic_id, prompt, "[FAILED]", self.log_path)
             return ""
         # provider == "none": log the prompt with a fallback marker
@@ -244,16 +260,13 @@ Respond ONLY with a JSON object:
 
     def _parse_retain_prior_response(self, response: str, topic_id: int) -> RetainPrior:
         try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start >= 0 and end > start:
-                data = json.loads(response[start:end])
-                prob = _clip_probability(data.get("retain_probability", 0.5))
-                return RetainPrior(
-                    topic_id=topic_id,
-                    probability=prob,
-                    reason=data.get("reason", ""),
-                )
+            data = _extract_json(response)
+            prob = _clip_probability(data.get("retain_probability", 0.5))
+            return RetainPrior(
+                topic_id=topic_id,
+                probability=prob,
+                reason=data.get("reason", ""),
+            )
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             pass
         return RetainPrior(topic_id=topic_id, probability=0.5,
@@ -261,16 +274,13 @@ Respond ONLY with a JSON object:
 
     def _parse_novelty_prior_response(self, response: str, topic_id: int) -> NoveltyPrior:
         try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start >= 0 and end > start:
-                data = json.loads(response[start:end])
-                prob = _clip_probability(data.get("novelty_probability", 0.5))
-                return NoveltyPrior(
-                    topic_id=topic_id,
-                    probability=prob,
-                    reason=data.get("reason", ""),
-                )
+            data = _extract_json(response)
+            prob = _clip_probability(data.get("novelty_probability", 0.5))
+            return NoveltyPrior(
+                topic_id=topic_id,
+                probability=prob,
+                reason=data.get("reason", ""),
+            )
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             pass
         return NoveltyPrior(topic_id=topic_id, probability=0.5,
@@ -391,18 +401,14 @@ Respond ONLY with a JSON object:
 
     def _parse_stage1_response(self, response: str, topic_id: int) -> CurationDecision:
         try:
-            # Extract JSON from response
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start >= 0 and end > start:
-                data = json.loads(response[start:end])
-                return CurationDecision(
-                    topic_id=topic_id,
-                    action=data.get("action", "RETAIN").upper(),
-                    refined_words=data.get("refined_words"),
-                    reason=data.get("reason", ""),
-                )
-        except (json.JSONDecodeError, KeyError):
+            data = _extract_json(response)
+            return CurationDecision(
+                topic_id=topic_id,
+                action=data.get("action", "RETAIN").upper(),
+                refined_words=data.get("refined_words"),
+                reason=data.get("reason", ""),
+            )
+        except (json.JSONDecodeError, KeyError, ValueError):
             pass
         # Default to RETAIN on parse failure
         return CurationDecision(topic_id=topic_id, action="RETAIN", reason="LLM parse failure")
@@ -527,17 +533,14 @@ Respond ONLY with a JSON object:
     def _parse_stage2_response(self, response: str, topic_id: int,
                                 default_words: list[str]) -> CurationDecision:
         try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start >= 0 and end > start:
-                data = json.loads(response[start:end])
-                return CurationDecision(
-                    topic_id=topic_id,
-                    action=data.get("action", "COVERED").upper(),
-                    refined_words=data.get("refined_words", default_words),
-                    reason=data.get("reason", ""),
-                )
-        except (json.JSONDecodeError, KeyError):
+            data = _extract_json(response)
+            return CurationDecision(
+                topic_id=topic_id,
+                action=data.get("action", "COVERED").upper(),
+                refined_words=data.get("refined_words", default_words),
+                reason=data.get("reason", ""),
+            )
+        except (json.JSONDecodeError, KeyError, ValueError):
             pass
         return CurationDecision(
             topic_id=topic_id, action="COVERED",
@@ -611,3 +614,45 @@ def _clip_probability(value, eps: float = 1e-4) -> float:
 
 def _sigmoid(x: float) -> float:
     return float(1.0 / (1.0 + np.exp(-x)))
+
+
+def _extract_json(text: str) -> dict:
+    """Extract the first balanced JSON object from the text."""
+    text = text.strip()
+    if text.startswith("```"):
+        first_nl = text.find("\n")
+        if first_nl != -1: text = text[first_nl+1:]
+        if text.endswith("```"): text = text[:-3]
+    
+    start_idx = text.find('{')
+    if start_idx == -1:
+        raise ValueError("No '{' found in response")
+        
+    brace_count = 0
+    end_idx = -1
+    in_string = False
+    escape = False
+    for i in range(start_idx, len(text)):
+        c = text[i]
+        if escape:
+            escape = False
+            continue
+        if c == '\\':
+            escape = True
+            continue
+        if c == '"':
+            in_string = not in_string
+            continue
+            
+        if not in_string:
+            if c == '{':
+                brace_count += 1
+            elif c == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_idx = i
+                    break
+                    
+    if end_idx != -1:
+        return json.loads(text[start_idx:end_idx+1])
+    raise ValueError("Failed to extract JSON: unmatched braces")

@@ -251,7 +251,7 @@ class ContinualTopicPipeline:
 
         # ── Step 4: Update Global State ──────────────────────────────────
         print(f"\n  Step 4: Updating global state...")
-        self.global_memory.update(
+        update_info = self.global_memory.update(
             retained_indices=retained_indices,
             retained_refined_words=retained_refined,
             novel_topics=novel_topics,
@@ -260,9 +260,9 @@ class ContinualTopicPipeline:
             timestamp=ts,
         )
 
-        result["n_retained"] = len(retained_indices)
-        result["n_removed"] = removed_count
-        result["n_novel"] = len(novel_topics)
+        result["n_retained"] = update_info.n_retained
+        result["n_removed"] = update_info.n_removed
+        result["n_novel"] = update_info.n_novel
         result["n_global"] = self.global_memory.n_topics
         result["global_diversity"] = topic_diversity(self.global_memory.active_topics)
 
@@ -278,39 +278,46 @@ class ContinualTopicPipeline:
         """Process one timestamp with the soft fixed-slot memory update."""
         active_global = self.global_memory.active_topics
 
-        print(f"\n  Step 2: Estimating soft LLM priors...")
-        retain_priors = self.curator.score_retain_priors(
-            global_topics=active_global,
-            local_topics=local_topics,
-            top_k=self.top_k_nearest,
-        )
-        novelty_priors = self.curator.score_novelty_priors(
-            local_topics=local_topics,
-            global_topics=active_global,
-            top_k=self.top_k_nearest,
-        )
+        if len(active_global) == 0 or len(local_topics) == 0:
+            retain_gates = np.zeros(len(active_global), dtype=np.float32)
+            novelty_gates = np.ones(len(local_topics), dtype=np.float32)
+            controller_info = {"loss": 0.0, "epochs": 0}
+            p = np.zeros(len(active_global), dtype=np.float32)
+            q = np.ones(len(local_topics), dtype=np.float32)
+        else:
+            print(f"\n  Step 2: Estimating soft LLM priors...")
+            retain_priors = self.curator.score_retain_priors(
+                global_topics=active_global,
+                local_topics=local_topics,
+                top_k=self.top_k_nearest,
+            )
+            novelty_priors = self.curator.score_novelty_priors(
+                local_topics=local_topics,
+                global_topics=active_global,
+                top_k=self.top_k_nearest,
+            )
 
-        p = np.array([x.probability for x in retain_priors], dtype=np.float32)
-        q = np.array([x.probability for x in novelty_priors], dtype=np.float32)
-        sim_matrix = cosine_similarity_matrix(local_topics, active_global)
+            p = np.array([x.probability for x in retain_priors], dtype=np.float32)
+            q = np.array([x.probability for x in novelty_priors], dtype=np.float32)
+            sim_matrix = cosine_similarity_matrix(local_topics, active_global)
 
-        print(f"\n  Step 3: Training soft gate controller...")
-        retain_features, novelty_features = build_gate_features(sim_matrix, p, q)
-        retain_gates, novelty_gates, controller_info = train_soft_controller(
-            retain_features=retain_features,
-            novelty_features=novelty_features,
-            retain_priors=p,
-            novelty_priors=q,
-            epochs=self.controller_epochs,
-            lr=self.controller_lr,
-            lambda_llm=self.lambda_llm,
-            hidden=self.controller_hidden,
-            device=self.device,
-        )
-        print(
-            f"  Gates: mean survival={retain_gates.mean():.3f}, "
-            f"mean novelty={novelty_gates.mean():.3f}"
-        )
+            print(f"\n  Step 3: Training soft gate controller...")
+            retain_features, novelty_features = build_gate_features(sim_matrix, p, q)
+            retain_gates, novelty_gates, controller_info = train_soft_controller(
+                retain_features=retain_features,
+                novelty_features=novelty_features,
+                retain_priors=p,
+                novelty_priors=q,
+                epochs=self.controller_epochs,
+                lr=self.controller_lr,
+                lambda_llm=self.lambda_llm,
+                hidden=self.controller_hidden,
+                device=self.device,
+            )
+            print(
+                f"  Gates: mean survival={retain_gates.mean():.3f}, "
+                f"mean novelty={novelty_gates.mean():.3f}"
+            )
 
         print(f"\n  Step 4: Soft-updating fixed global memory...")
         update_stats = self.global_memory.soft_update(
@@ -327,10 +334,12 @@ class ContinualTopicPipeline:
             eps=self.soft_eps,
         )
 
-        result["n_retained"] = int(np.rint(retain_gates.sum()))
+        result["n_retained"] = self.global_memory.n_topics
         result["n_removed"] = 0
-        result["n_novel"] = int(np.rint(novelty_gates.sum()))
+        result["n_novel"] = 0
         result["n_global"] = self.global_memory.n_topics
+        result["effective_retained"] = float(retain_gates.sum())
+        result["effective_novel"] = float(novelty_gates.sum())
         result["global_diversity"] = topic_diversity(self.global_memory.active_topics)
         result["soft_update"] = update_stats
         result["controller_info"] = controller_info
@@ -455,9 +464,15 @@ class ContinualTopicPipeline:
         print(f"    Local topics: {result['n_local_topics']}")
         if "local_diversity" in result:
             print(f"    Local diversity: {result['local_diversity']:.3f}")
-        print(f"    Retained: {result['n_retained']}, "
-              f"Removed: {result['n_removed']}, "
-              f"Novel: {result['n_novel']}")
+            
+        if "effective_retained" in result:
+            print(f"    Effective Retained Mass: {result['effective_retained']:.1f}, "
+                  f"Effective Novel Mass: {result['effective_novel']:.1f}")
+        else:
+            print(f"    Retained: {result['n_retained']}, "
+                  f"Removed: {result['n_removed']}, "
+                  f"Novel: {result['n_novel']}")
+                  
         print(f"    Global K = {result['n_global']} active topics")
         if "global_diversity" in result:
             print(f"    Global diversity: {result['global_diversity']:.3f}")
@@ -471,9 +486,15 @@ class ContinualTopicPipeline:
         print(f"Final global topics: K = {self.global_memory.n_topics}")
         print(f"\nTopic evolution:")
         for r in self.results:
-            print(f"  T{r['timestamp']:2d} ({r['label']:>9s}): "
-                  f"+{r['n_novel']:3d} novel, -{r['n_removed']:3d} removed, "
-                  f"={r['n_retained']:3d} retained → K_{r['timestamp']} = {r['n_global']}")
+            if "effective_retained" in r:
+                print(f"  T{r['timestamp']:2d} ({r['label']:>9s}): "
+                      f"+{r['effective_novel']:5.1f} effective novel, "
+                      f"={r['effective_retained']:5.1f} effective retained "
+                      f"→ K_{r['timestamp']} = {r['n_global']} (fixed slots)")
+            else:
+                print(f"  T{r['timestamp']:2d} ({r['label']:>9s}): "
+                      f"+{r['n_novel']:3d} novel, -{r['n_removed']:3d} removed, "
+                      f"={r['n_retained']:3d} retained → K_{r['timestamp']} = {r['n_global']}")
 
         print(f"\n{self.global_memory.get_summary()}")
 

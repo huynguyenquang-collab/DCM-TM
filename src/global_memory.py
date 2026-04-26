@@ -134,7 +134,7 @@ class GlobalMemory:
         novel_beta_rows: Optional[np.ndarray],
         local_beta: np.ndarray,
         timestamp: int,
-    ):
+    ) -> GlobalUpdate:
         """Update global memory after curation.
 
         retained_indices      : indices into self.topics to keep
@@ -218,6 +218,8 @@ class GlobalMemory:
         print(f"  Global memory updated at T{timestamp}: "
               f"{len(retained_ids)} retained, {len(removed_ids)} removed, "
               f"{len(novel_ids)} novel → K_{timestamp} = {self.K}")
+              
+        return update
 
     # ── Tensor access ─────────────────────────────────────────────────────
 

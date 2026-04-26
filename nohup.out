@@ -1,0 +1,1041 @@
+nohup: ignoring input
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Configuration:
+data:
+  dir: data/NIPS
+  test_bow: test_bow.npz
+  test_times: test_times.txt
+  time2id: time2id.txt
+  train_bow: train_bow.npz
+  train_times: train_times.txt
+  vocab: vocab.txt
+llm:
+  cache_path: outputs/llm_cache.json
+  fallback:
+    novel_threshold: 0.5
+    prune_threshold: 0.3
+    soft_scale: 12.0
+  max_retries: 6
+  max_tokens: 1024
+  model: gpt-oss-120b
+  provider: nim
+  rate_limit_delay: 2.0
+  retry_initial_delay: 5.0
+  retry_max_delay: 60.0
+  temperature: 0.1
+logging:
+  level: INFO
+pipeline:
+  device: auto
+  init_global_from_first: true
+  max_topics: 200
+  output_dir: outputs
+  save_intermediate: true
+  seed: 42
+soft_memory:
+  controller_epochs: 20
+  controller_hidden: 16
+  controller_lr: 0.001
+  enabled: true
+  eps: 1.0e-08
+  infer_aligned_theta: true
+  lambda_llm: 1.0
+  novelty_lambda: 0.3
+  tau_assign: 0.1
+  tau_replace: 0.1
+  theta_epochs: 50
+  theta_kl_warmup_epochs: 10
+topics:
+  embedding_model: all-MiniLM-L6-v2
+  similarity_threshold: 0.7
+  top_k_nearest: 5
+  top_m_words: 15
+vae:
+  batch_size: 256
+  dropout: 0.2
+  enc_hidden: 256
+  epochs: 100
+  factorized_decoder: true
+  kl_warmup_epochs: 20
+  lr: 0.002
+  n_topics: 50
+  patience: 10
+  use_residual: true
+  weight_decay: 1.0e-06
+
+Loading corpus from data/NIPS...
+Loaded corpus: 5667 vocab, 11 timestamps, 467507 train docs, 51946 test docs
+Using device: cuda
+
+======================================================================
+CONTINUAL TOPIC MODEL PIPELINE
+======================================================================
+Timestamps: 11
+Topics per timestamp: 50
+Vocab size: 5667
+Residual learning: True
+Factorized decoder: True
+Soft memory: True
+LLM provider: nim
+======================================================================
+
+
+──────────────────────────────────────────────────────────────────────
+TIMESTAMP T0 (1987-1989) — 9273 documents
+──────────────────────────────────────────────────────────────────────
+
+  Step 1: Training local VAE...
+  n_topics = 50 (K_{t-1} = 0)
+  Loading embedding model: all-MiniLM-L6-v2
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 4062.11it/s]
+[1mBertModel LOAD REPORT[0m from: sentence-transformers/all-MiniLM-L6-v2
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+  Embedding vocabulary with all-MiniLM-L6-v2: 5667 words
+  Epoch   1 | Loss 262.42 (recon 260.80 + kl 32.37 * 0.05) | Test 262.91 *
+  Epoch   2 | Loss 248.38 (recon 244.92 + kl 34.56 * 0.10) | Test 254.05 *
+  Epoch   3 | Loss 243.26 (recon 238.70 + kl 30.42 * 0.15) | Test 242.82 *
+  Epoch   4 | Loss 240.85 (recon 235.34 + kl 27.57 * 0.20) | Test 240.28 *
+  Epoch   5 | Loss 238.42 (recon 231.92 + kl 26.01 * 0.25) | Test 234.91 *
+  Epoch   6 | Loss 237.95 (recon 230.72 + kl 24.10 * 0.30) | Test 234.50 *
+  Epoch   7 | Loss 236.44 (recon 228.43 + kl 22.88 * 0.35) | Test 230.62 *
+  Epoch   8 | Loss 235.04 (recon 226.49 + kl 21.38 * 0.40) | Test 226.48 *
+  Epoch  10 | Loss 235.07 (recon 225.54 + kl 19.06 * 0.50) | Test 224.27 *
+  Epoch  12 | Loss 234.88 (recon 224.69 + kl 16.98 * 0.60) | Test 222.50 *
+  Epoch  13 | Loss 234.89 (recon 224.63 + kl 15.77 * 0.65) | Test 220.31 *
+  Epoch  14 | Loss 234.39 (recon 223.77 + kl 15.17 * 0.70) | Test 219.22 *
+  Epoch  16 | Loss 234.87 (recon 224.11 + kl 13.45 * 0.80) | Test 216.91 *
+  Epoch  17 | Loss 235.39 (recon 224.39 + kl 12.94 * 0.85) | Test 216.59 *
+  Epoch  18 | Loss 234.77 (recon 223.75 + kl 12.24 * 0.90) | Test 215.95 *
+  Epoch  20 | Loss 234.55 (recon 223.64 + kl 10.91 * 1.00) | Test 215.33 *
+  Epoch  21 | Loss 234.76 (recon 224.16 + kl 10.60 * 1.00) | Test 214.86 *
+  Epoch  23 | Loss 233.58 (recon 223.13 + kl 10.45 * 1.00) | Test 214.32 *
+  Epoch  24 | Loss 233.91 (recon 223.72 + kl 10.19 * 1.00) | Test 213.83 *
+  Epoch  25 | Loss 232.60 (recon 222.64 + kl 9.96 * 1.00) | Test 213.56 *
+  Epoch  27 | Loss 233.07 (recon 223.04 + kl 10.04 * 1.00) | Test 212.60 *
+  Epoch  28 | Loss 231.31 (recon 221.49 + kl 9.82 * 1.00) | Test 211.87 *
+  Epoch  30 | Loss 230.63 (recon 220.89 + kl 9.74 * 1.00) | Test 211.88
+  Epoch  31 | Loss 230.87 (recon 221.24 + kl 9.63 * 1.00) | Test 211.43 *
+  Epoch  36 | Loss 230.25 (recon 220.91 + kl 9.35 * 1.00) | Test 210.52 *
+  Epoch  38 | Loss 229.97 (recon 220.82 + kl 9.15 * 1.00) | Test 210.40 *
+  Epoch  40 | Loss 229.20 (recon 220.13 + kl 9.06 * 1.00) | Test 209.81 *
+  Epoch  43 | Loss 228.90 (recon 219.92 + kl 8.98 * 1.00) | Test 209.81 *
+  Epoch  44 | Loss 227.69 (recon 218.76 + kl 8.93 * 1.00) | Test 209.72 *
+  Epoch  46 | Loss 227.09 (recon 218.20 + kl 8.89 * 1.00) | Test 209.63 *
+  Epoch  48 | Loss 227.35 (recon 218.42 + kl 8.93 * 1.00) | Test 209.61 *
+  Epoch  49 | Loss 227.97 (recon 219.23 + kl 8.73 * 1.00) | Test 208.79 *
+  Epoch  50 | Loss 227.50 (recon 218.81 + kl 8.69 * 1.00) | Test 209.57
+  Epoch  54 | Loss 227.57 (recon 218.86 + kl 8.71 * 1.00) | Test 208.01 *
+  Epoch  60 | Loss 225.85 (recon 217.25 + kl 8.61 * 1.00) | Test 207.87 *
+  Epoch  62 | Loss 226.83 (recon 218.23 + kl 8.61 * 1.00) | Test 207.83 *
+  Epoch  66 | Loss 226.42 (recon 217.87 + kl 8.55 * 1.00) | Test 207.24 *
+  Epoch  70 | Loss 227.29 (recon 218.85 + kl 8.44 * 1.00) | Test 208.05
+  Epoch  74 | Loss 226.72 (recon 218.51 + kl 8.21 * 1.00) | Test 207.00 *
+  Epoch  77 | Loss 225.20 (recon 216.86 + kl 8.34 * 1.00) | Test 206.59 *
+  Epoch  80 | Loss 226.08 (recon 217.72 + kl 8.37 * 1.00) | Test 207.17
+  Epoch  81 | Loss 225.21 (recon 216.75 + kl 8.46 * 1.00) | Test 206.58 *
+  Epoch  84 | Loss 224.99 (recon 216.65 + kl 8.34 * 1.00) | Test 206.12 *
+  Epoch  89 | Loss 224.32 (recon 215.90 + kl 8.42 * 1.00) | Test 205.99 *
+  Epoch  90 | Loss 224.46 (recon 216.04 + kl 8.42 * 1.00) | Test 206.17
+  Epoch  93 | Loss 224.24 (recon 215.81 + kl 8.43 * 1.00) | Test 205.84 *
+  Epoch 100 | Loss 224.89 (recon 216.36 + kl 8.53 * 1.00) | Test 205.84
+  Local topics: 50, diversity: 0.841
+
+  First timestamp — initializing global memory from local topics
+  Global memory initialized: K_0 = 50 topics from T0
+  Aligned theta: 9273 docs x 50 topics
+
+  Summary T0 (1987-1989):
+    Local topics: 50
+    Local diversity: 0.841
+    Retained: 0, Removed: 0, Novel: 50
+    Global K = 50 active topics
+    Wall time: 137.5s
+
+──────────────────────────────────────────────────────────────────────
+TIMESTAMP T1 (1990-1992) — 12574 documents
+──────────────────────────────────────────────────────────────────────
+
+  Step 1: Training local VAE...
+  n_topics = 50 (K_{t-1} = 50)
+  Using residual learning: K_{t-1} = 50 topics
+  Epoch   1 | Loss 1456.44 (recon 259.79 + kl 23932.84 * 0.05) | Test 285.93 *
+  Epoch   2 | Loss 245.99 (recon 242.34 + kl 36.47 * 0.10) | Test 272.23 *
+  Epoch   3 | Loss 240.01 (recon 235.12 + kl 32.60 * 0.15) | Test 262.24 *
+  Epoch   4 | Loss 238.97 (recon 233.03 + kl 29.73 * 0.20) | Test 256.57 *
+  Epoch   5 | Loss 236.18 (recon 229.28 + kl 27.64 * 0.25) | Test 253.09 *
+  Epoch   6 | Loss 235.00 (recon 227.28 + kl 25.73 * 0.30) | Test 250.43 *
+  Epoch   7 | Loss 234.16 (recon 225.70 + kl 24.15 * 0.35) | Test 247.21 *
+  Epoch   8 | Loss 234.48 (recon 225.47 + kl 22.51 * 0.40) | Test 245.20 *
+  Epoch   9 | Loss 234.54 (recon 224.99 + kl 21.21 * 0.45) | Test 241.96 *
+  Epoch  10 | Loss 233.83 (recon 223.86 + kl 19.94 * 0.50) | Test 240.55 *
+  Epoch  11 | Loss 233.41 (recon 223.08 + kl 18.77 * 0.55) | Test 239.63 *
+  Epoch  12 | Loss 234.37 (recon 223.80 + kl 17.62 * 0.60) | Test 238.26 *
+  Epoch  13 | Loss 234.52 (recon 223.59 + kl 16.81 * 0.65) | Test 237.41 *
+  Epoch  14 | Loss 234.70 (recon 223.76 + kl 15.63 * 0.70) | Test 235.87 *
+  Epoch  15 | Loss 233.62 (recon 222.50 + kl 14.82 * 0.75) | Test 235.78 *
+  Epoch  16 | Loss 235.47 (recon 224.30 + kl 13.96 * 0.80) | Test 235.63 *
+  Epoch  17 | Loss 234.86 (recon 223.69 + kl 13.15 * 0.85) | Test 234.96 *
+  Epoch  18 | Loss 234.87 (recon 223.49 + kl 12.65 * 0.90) | Test 234.03 *
+  Epoch  19 | Loss 235.27 (recon 224.03 + kl 11.83 * 0.95) | Test 233.54 *
+  Epoch  20 | Loss 235.73 (recon 224.57 + kl 11.16 * 1.00) | Test 233.46 *
+  Epoch  21 | Loss 234.84 (recon 223.82 + kl 11.02 * 1.00) | Test 233.18 *
+  Epoch  22 | Loss 234.60 (recon 224.04 + kl 10.56 * 1.00) | Test 232.58 *
+  Epoch  23 | Loss 235.03 (recon 224.44 + kl 10.59 * 1.00) | Test 232.11 *
+  Epoch  24 | Loss 233.63 (recon 223.42 + kl 10.20 * 1.00) | Test 231.49 *
+  Epoch  25 | Loss 233.87 (recon 223.73 + kl 10.14 * 1.00) | Test 231.46 *
+  Epoch  28 | Loss 232.86 (recon 222.99 + kl 9.87 * 1.00) | Test 230.72 *
+  Epoch  29 | Loss 231.62 (recon 221.93 + kl 9.69 * 1.00) | Test 230.69 *
+  Epoch  30 | Loss 233.66 (recon 223.85 + kl 9.81 * 1.00) | Test 230.70
+  Epoch  31 | Loss 231.92 (recon 222.38 + kl 9.54 * 1.00) | Test 230.62 *
+  Epoch  32 | Loss 233.93 (recon 224.35 + kl 9.58 * 1.00) | Test 230.21 *
+  Epoch  33 | Loss 231.93 (recon 222.41 + kl 9.52 * 1.00) | Test 230.05 *
+  Epoch  38 | Loss 231.80 (recon 222.61 + kl 9.18 * 1.00) | Test 229.70 *
+  Epoch  39 | Loss 232.74 (recon 223.64 + kl 9.10 * 1.00) | Test 229.55 *
+  Epoch  40 | Loss 230.68 (recon 221.53 + kl 9.15 * 1.00) | Test 229.96
+  Epoch  41 | Loss 230.90 (recon 221.79 + kl 9.11 * 1.00) | Test 229.24 *
+  Epoch  43 | Loss 229.73 (recon 220.67 + kl 9.06 * 1.00) | Test 229.15 *
+  Epoch  45 | Loss 230.31 (recon 221.40 + kl 8.91 * 1.00) | Test 228.88 *
+  Epoch  48 | Loss 230.62 (recon 221.60 + kl 9.02 * 1.00) | Test 228.80 *
+  Epoch  49 | Loss 231.15 (recon 222.28 + kl 8.87 * 1.00) | Test 228.30 *
+  Epoch  50 | Loss 232.44 (recon 223.62 + kl 8.82 * 1.00) | Test 228.85
+  Epoch  51 | Loss 229.78 (recon 220.96 + kl 8.82 * 1.00) | Test 228.26 *
+  Epoch  55 | Loss 231.06 (recon 222.27 + kl 8.79 * 1.00) | Test 228.07 *
+  Epoch  59 | Loss 229.41 (recon 220.69 + kl 8.72 * 1.00) | Test 227.77 *
+  Epoch  60 | Loss 230.80 (recon 222.10 + kl 8.70 * 1.00) | Test 227.72 *
+  Epoch  67 | Loss 228.35 (recon 219.83 + kl 8.52 * 1.00) | Test 227.21 *
+  Epoch  68 | Loss 229.53 (recon 220.97 + kl 8.57 * 1.00) | Test 227.07 *
+  Epoch  69 | Loss 228.64 (recon 220.04 + kl 8.60 * 1.00) | Test 227.00 *
+  Epoch  70 | Loss 228.41 (recon 219.78 + kl 8.63 * 1.00) | Test 226.88 *
+  Epoch  72 | Loss 228.62 (recon 220.00 + kl 8.63 * 1.00) | Test 226.86 *
+  Epoch  77 | Loss 228.16 (recon 219.53 + kl 8.64 * 1.00) | Test 226.76 *
+  Epoch  79 | Loss 227.41 (recon 218.77 + kl 8.64 * 1.00) | Test 226.49 *
+  Epoch  80 | Loss 228.16 (recon 219.57 + kl 8.58 * 1.00) | Test 226.44 *
+  Epoch  81 | Loss 228.78 (recon 220.16 + kl 8.63 * 1.00) | Test 226.31 *
+  Epoch  84 | Loss 228.47 (recon 219.82 + kl 8.65 * 1.00) | Test 226.26 *
+  Epoch  88 | Loss 227.13 (recon 218.45 + kl 8.68 * 1.00) | Test 226.24 *
+  Epoch  90 | Loss 228.71 (recon 220.03 + kl 8.69 * 1.00) | Test 226.44
+  Epoch  95 | Loss 228.52 (recon 219.81 + kl 8.71 * 1.00) | Test 226.10 *
+  Epoch  97 | Loss 227.68 (recon 218.96 + kl 8.71 * 1.00) | Test 226.05 *
+  Epoch 100 | Loss 227.70 (recon 219.02 + kl 8.68 * 1.00) | Test 226.35
+  Local topics: 50, diversity: 0.721
+
+  Step 2: Estimating soft LLM priors...
+
+  Step 3: Training soft gate controller...
+  Gates: mean survival=0.505, mean novelty=0.498
+
+  Step 4: Soft-updating fixed global memory...
+  Soft memory updated at T1: K=50, mean survival=0.505, novel mass=24.907
+
+  Step 5: Inferring aligned theta under updated memory...
+  Aligned theta: 12574 docs x 50 topics
+
+  Summary T1 (1990-1992):
+    Local topics: 50
+    Local diversity: 0.721
+    Effective Retained Mass: 25.2, Effective Novel Mass: 24.9
+    Global K = 50 active topics
+    Global diversity: 0.759
+    Wall time: 179.3s
+
+──────────────────────────────────────────────────────────────────────
+TIMESTAMP T2 (1993-1995) — 13850 documents
+──────────────────────────────────────────────────────────────────────
+
+  Step 1: Training local VAE...
+  n_topics = 50 (K_{t-1} = 50)
+  Using residual learning: K_{t-1} = 50 topics
+  Epoch   1 | Loss 265.25 (recon 262.93 + kl 46.38 * 0.05) | Test 295.15 *
+  Epoch   2 | Loss 251.22 (recon 247.51 + kl 37.14 * 0.10) | Test 271.88 *
+  Epoch   3 | Loss 245.90 (recon 240.82 + kl 33.87 * 0.15) | Test 263.23 *
+  Epoch   4 | Loss 243.04 (recon 236.72 + kl 31.59 * 0.20) | Test 259.80 *
+  Epoch   5 | Loss 242.21 (recon 234.85 + kl 29.43 * 0.25) | Test 255.97 *
+  Epoch   6 | Loss 242.33 (recon 234.13 + kl 27.35 * 0.30) | Test 252.06 *
+  Epoch   7 | Loss 239.75 (recon 230.76 + kl 25.68 * 0.35) | Test 248.22 *
+  Epoch   8 | Loss 240.83 (recon 231.19 + kl 24.10 * 0.40) | Test 246.22 *
+  Epoch   9 | Loss 240.16 (recon 230.07 + kl 22.41 * 0.45) | Test 246.01 *
+  Epoch  10 | Loss 240.78 (recon 230.22 + kl 21.13 * 0.50) | Test 242.78 *
+  Epoch  12 | Loss 239.64 (recon 228.51 + kl 18.56 * 0.60) | Test 240.44 *
+  Epoch  13 | Loss 239.65 (recon 228.34 + kl 17.41 * 0.65) | Test 240.43 *
+  Epoch  14 | Loss 240.03 (recon 228.59 + kl 16.35 * 0.70) | Test 237.74 *
+  Epoch  17 | Loss 241.57 (recon 230.10 + kl 13.49 * 0.85) | Test 236.64 *
+  Epoch  18 | Loss 242.48 (recon 231.10 + kl 12.65 * 0.90) | Test 236.16 *
+  Epoch  20 | Loss 242.74 (recon 231.55 + kl 11.19 * 1.00) | Test 235.50 *
+  Epoch  22 | Loss 241.62 (recon 230.94 + kl 10.68 * 1.00) | Test 234.90 *
+  Epoch  23 | Loss 240.43 (recon 229.92 + kl 10.52 * 1.00) | Test 234.47 *
+  Epoch  24 | Loss 241.53 (recon 231.21 + kl 10.32 * 1.00) | Test 234.00 *
+  Epoch  25 | Loss 238.85 (recon 228.61 + kl 10.24 * 1.00) | Test 233.79 *
+  Epoch  26 | Loss 240.36 (recon 230.31 + kl 10.05 * 1.00) | Test 233.15 *
+  Epoch  27 | Loss 239.91 (recon 229.98 + kl 9.93 * 1.00) | Test 233.03 *
+  Epoch  30 | Loss 241.30 (recon 231.56 + kl 9.74 * 1.00) | Test 232.75 *
+  Epoch  35 | Loss 238.82 (recon 229.37 + kl 9.46 * 1.00) | Test 232.10 *
+  Epoch  36 | Loss 238.42 (recon 229.15 + kl 9.27 * 1.00) | Test 232.10 *
+  Epoch  38 | Loss 237.95 (recon 228.75 + kl 9.19 * 1.00) | Test 231.73 *
+  Epoch  40 | Loss 238.14 (recon 228.98 + kl 9.16 * 1.00) | Test 232.01
+  Epoch  41 | Loss 237.21 (recon 228.09 + kl 9.11 * 1.00) | Test 231.52 *
+  Epoch  47 | Loss 238.10 (recon 229.10 + kl 8.99 * 1.00) | Test 231.29 *
+  Epoch  48 | Loss 236.16 (recon 227.14 + kl 9.02 * 1.00) | Test 231.23 *
+  Epoch  49 | Loss 236.77 (recon 227.92 + kl 8.84 * 1.00) | Test 231.13 *
+  Epoch  50 | Loss 237.44 (recon 228.53 + kl 8.92 * 1.00) | Test 231.89
+  Epoch  51 | Loss 238.51 (recon 229.61 + kl 8.90 * 1.00) | Test 230.85 *
+  Epoch  54 | Loss 237.31 (recon 228.44 + kl 8.88 * 1.00) | Test 230.79 *
+  Epoch  59 | Loss 236.29 (recon 227.51 + kl 8.78 * 1.00) | Test 230.68 *
+  Epoch  60 | Loss 235.80 (recon 227.03 + kl 8.76 * 1.00) | Test 231.37
+  Epoch  61 | Loss 236.32 (recon 227.57 + kl 8.76 * 1.00) | Test 230.39 *
+  Epoch  69 | Loss 235.61 (recon 227.01 + kl 8.60 * 1.00) | Test 230.23 *
+  Epoch  70 | Loss 235.18 (recon 226.50 + kl 8.68 * 1.00) | Test 229.69 *
+  Epoch  76 | Loss 234.92 (recon 226.25 + kl 8.66 * 1.00) | Test 229.10 *
+  Epoch  79 | Loss 234.12 (recon 225.49 + kl 8.63 * 1.00) | Test 228.91 *
+  Epoch  80 | Loss 233.94 (recon 225.25 + kl 8.70 * 1.00) | Test 230.08
+  Epoch  81 | Loss 234.76 (recon 226.05 + kl 8.71 * 1.00) | Test 228.82 *
+  Epoch  89 | Loss 234.44 (recon 225.77 + kl 8.67 * 1.00) | Test 228.59 *
+  Epoch  90 | Loss 233.55 (recon 224.84 + kl 8.70 * 1.00) | Test 229.44
+  Epoch  92 | Loss 234.05 (recon 225.39 + kl 8.66 * 1.00) | Test 228.58 *
+  Epoch  98 | Loss 234.83 (recon 226.17 + kl 8.66 * 1.00) | Test 228.53 *
+  Epoch 100 | Loss 234.05 (recon 225.30 + kl 8.75 * 1.00) | Test 228.19 *
+  Local topics: 50, diversity: 0.771
+
+  Step 2: Estimating soft LLM priors...
+
+  Step 3: Training soft gate controller...
+  Gates: mean survival=0.532, mean novelty=0.413
+
+  Step 4: Soft-updating fixed global memory...
+  Soft memory updated at T2: K=50, mean survival=0.532, novel mass=20.655
+
+  Step 5: Inferring aligned theta under updated memory...
+  Aligned theta: 13850 docs x 50 topics
+
+  Summary T2 (1993-1995):
+    Local topics: 50
+    Local diversity: 0.771
+    Effective Retained Mass: 26.6, Effective Novel Mass: 20.7
+    Global K = 50 active topics
+    Global diversity: 0.727
+    Wall time: 190.9s
+
+──────────────────────────────────────────────────────────────────────
+TIMESTAMP T3 (1996-1998) — 14751 documents
+──────────────────────────────────────────────────────────────────────
+
+  Step 1: Training local VAE...
+  n_topics = 50 (K_{t-1} = 50)
+  Using residual learning: K_{t-1} = 50 topics
+  Epoch   1 | Loss 263.96 (recon 260.89 + kl 61.30 * 0.05) | Test 291.50 *
+  Epoch   2 | Loss 248.88 (recon 245.04 + kl 38.34 * 0.10) | Test 272.18 *
+  Epoch   3 | Loss 244.20 (recon 238.96 + kl 34.95 * 0.15) | Test 263.53 *
+  Epoch   4 | Loss 241.58 (recon 235.09 + kl 32.45 * 0.20) | Test 259.09 *
+  Epoch   5 | Loss 240.32 (recon 232.82 + kl 29.99 * 0.25) | Test 254.53 *
+  Epoch   6 | Loss 238.91 (recon 230.48 + kl 28.10 * 0.30) | Test 250.17 *
+  Epoch   7 | Loss 238.56 (recon 229.47 + kl 25.97 * 0.35) | Test 249.37 *
+  Epoch   8 | Loss 238.29 (recon 228.54 + kl 24.40 * 0.40) | Test 247.25 *
+  Epoch   9 | Loss 238.45 (recon 228.19 + kl 22.78 * 0.45) | Test 245.03 *
+  Epoch  10 | Loss 238.76 (recon 228.10 + kl 21.33 * 0.50) | Test 243.31 *
+  Epoch  11 | Loss 238.68 (recon 227.76 + kl 19.86 * 0.55) | Test 241.83 *
+  Epoch  12 | Loss 238.86 (recon 227.61 + kl 18.74 * 0.60) | Test 240.66 *
+  Epoch  13 | Loss 239.16 (recon 227.77 + kl 17.52 * 0.65) | Test 238.42 *
+  Epoch  14 | Loss 239.50 (recon 228.01 + kl 16.41 * 0.70) | Test 237.89 *
+  Epoch  15 | Loss 239.90 (recon 228.36 + kl 15.39 * 0.75) | Test 236.88 *
+  Epoch  17 | Loss 240.13 (recon 228.51 + kl 13.67 * 0.85) | Test 236.19 *
+  Epoch  18 | Loss 240.45 (recon 228.99 + kl 12.74 * 0.90) | Test 235.47 *
+  Epoch  19 | Loss 241.23 (recon 229.86 + kl 11.97 * 0.95) | Test 235.37 *
+  Epoch  20 | Loss 240.91 (recon 229.65 + kl 11.26 * 1.00) | Test 235.49
+  Epoch  21 | Loss 240.72 (recon 229.65 + kl 11.07 * 1.00) | Test 234.49 *
+  Epoch  22 | Loss 240.35 (recon 229.69 + kl 10.66 * 1.00) | Test 233.78 *
+  Epoch  24 | Loss 239.64 (recon 229.37 + kl 10.27 * 1.00) | Test 233.38 *
+  Epoch  27 | Loss 239.01 (recon 229.00 + kl 10.01 * 1.00) | Test 233.35 *
+  Epoch  28 | Loss 238.91 (recon 229.03 + kl 9.88 * 1.00) | Test 232.91 *
+  Epoch  29 | Loss 238.91 (recon 229.18 + kl 9.73 * 1.00) | Test 232.89 *
+  Epoch  30 | Loss 238.50 (recon 228.79 + kl 9.71 * 1.00) | Test 232.78 *
+  Epoch  31 | Loss 238.43 (recon 228.83 + kl 9.60 * 1.00) | Test 232.74 *
+  Epoch  32 | Loss 238.20 (recon 228.75 + kl 9.44 * 1.00) | Test 232.04 *
+  Epoch  34 | Loss 237.99 (recon 228.59 + kl 9.40 * 1.00) | Test 232.00 *
+  Epoch  35 | Loss 238.00 (recon 228.69 + kl 9.31 * 1.00) | Test 231.79 *
+  Epoch  36 | Loss 237.60 (recon 228.33 + kl 9.27 * 1.00) | Test 231.79 *
+  Epoch  38 | Loss 237.40 (recon 228.30 + kl 9.10 * 1.00) | Test 231.72 *
+  Epoch  39 | Loss 237.50 (recon 228.36 + kl 9.14 * 1.00) | Test 231.59 *
+  Epoch  40 | Loss 237.31 (recon 228.25 + kl 9.06 * 1.00) | Test 231.31 *
+  Epoch  41 | Loss 237.52 (recon 228.44 + kl 9.08 * 1.00) | Test 231.22 *
+  Epoch  43 | Loss 236.91 (recon 227.93 + kl 8.98 * 1.00) | Test 230.94 *
+  Epoch  50 | Loss 236.11 (recon 227.30 + kl 8.82 * 1.00) | Test 230.46 *
+  Epoch  51 | Loss 236.05 (recon 227.25 + kl 8.81 * 1.00) | Test 230.14 *
+  Epoch  55 | Loss 235.74 (recon 226.90 + kl 8.83 * 1.00) | Test 229.82 *
+  Epoch  56 | Loss 235.61 (recon 226.70 + kl 8.91 * 1.00) | Test 229.77 *
+  Epoch  60 | Loss 235.44 (recon 226.58 + kl 8.87 * 1.00) | Test 230.19
+  Epoch  62 | Loss 235.24 (recon 226.28 + kl 8.97 * 1.00) | Test 229.64 *
+  Epoch  64 | Loss 235.34 (recon 226.49 + kl 8.85 * 1.00) | Test 229.59 *
+  Epoch  70 | Loss 235.12 (recon 226.21 + kl 8.92 * 1.00) | Test 229.89
+  Epoch  72 | Loss 234.61 (recon 225.79 + kl 8.83 * 1.00) | Test 229.39 *
+  Epoch  73 | Loss 234.54 (recon 225.62 + kl 8.93 * 1.00) | Test 229.18 *
+  Epoch  76 | Loss 234.51 (recon 225.60 + kl 8.91 * 1.00) | Test 229.09 *
+  Epoch  78 | Loss 234.63 (recon 225.67 + kl 8.96 * 1.00) | Test 229.01 *
+  Epoch  80 | Loss 234.53 (recon 225.71 + kl 8.82 * 1.00) | Test 229.21
+  Epoch  83 | Loss 234.54 (recon 225.59 + kl 8.95 * 1.00) | Test 228.90 *
+  Epoch  90 | Loss 234.21 (recon 225.26 + kl 8.95 * 1.00) | Test 229.19
+  Early stopping at epoch 93 (patience=10)
+  Local topics: 50, diversity: 0.736
+
+  Step 2: Estimating soft LLM priors...
+
+  Step 3: Training soft gate controller...
+  Gates: mean survival=0.557, mean novelty=0.476
+
+  Step 4: Soft-updating fixed global memory...
+  Soft memory updated at T3: K=50, mean survival=0.557, novel mass=23.790
+
+  Step 5: Inferring aligned theta under updated memory...
+  Aligned theta: 14751 docs x 50 topics
+
+  Summary T3 (1996-1998):
+    Local topics: 50
+    Local diversity: 0.736
+    Effective Retained Mass: 27.9, Effective Novel Mass: 23.8
+    Global K = 50 active topics
+    Global diversity: 0.660
+    Wall time: 198.6s
+
+──────────────────────────────────────────────────────────────────────
+TIMESTAMP T4 (1999-2001) — 18909 documents
+──────────────────────────────────────────────────────────────────────
+
+  Step 1: Training local VAE...
+  n_topics = 50 (K_{t-1} = 50)
+  Using residual learning: K_{t-1} = 50 topics
+  Epoch   1 | Loss 143722.38 (recon 231.59 + kl 2869816.12 * 0.05) | Test 277.99 *
+  Epoch   2 | Loss 221.39 (recon 217.56 + kl 38.31 * 0.10) | Test 257.45 *
+  Epoch   3 | Loss 216.99 (recon 211.68 + kl 35.36 * 0.15) | Test 247.95 *
+  Epoch   4 | Loss 214.70 (recon 208.19 + kl 32.57 * 0.20) | Test 244.36 *
+  Epoch   5 | Loss 213.74 (recon 206.13 + kl 30.45 * 0.25) | Test 237.19 *
+  Epoch   6 | Loss 213.07 (recon 204.63 + kl 28.15 * 0.30) | Test 235.05 *
+  Epoch   7 | Loss 212.90 (recon 203.75 + kl 26.15 * 0.35) | Test 233.78 *
+  Epoch   8 | Loss 212.94 (recon 203.24 + kl 24.24 * 0.40) | Test 230.89 *
+  Epoch   9 | Loss 213.17 (recon 203.07 + kl 22.45 * 0.45) | Test 229.67 *
+  Epoch  10 | Loss 213.53 (recon 203.08 + kl 20.89 * 0.50) | Test 227.83 *
+  Epoch  11 | Loss 213.81 (recon 203.10 + kl 19.47 * 0.55) | Test 225.98 *
+  Epoch  12 | Loss 214.22 (recon 203.39 + kl 18.06 * 0.60) | Test 225.64 *
+  Epoch  13 | Loss 214.57 (recon 203.59 + kl 16.90 * 0.65) | Test 224.98 *
+  Epoch  14 | Loss 214.82 (recon 203.89 + kl 15.61 * 0.70) | Test 224.38 *
+  Epoch  15 | Loss 215.35 (recon 204.38 + kl 14.63 * 0.75) | Test 223.37 *
+  Epoch  16 | Loss 215.41 (recon 204.55 + kl 13.58 * 0.80) | Test 222.62 *
+  Epoch  17 | Loss 215.78 (recon 205.10 + kl 12.57 * 0.85) | Test 221.75 *
+  Epoch  18 | Loss 216.08 (recon 205.59 + kl 11.66 * 0.90) | Test 221.42 *
+  Epoch  19 | Loss 216.27 (recon 205.96 + kl 10.86 * 0.95) | Test 220.84 *
+  Epoch  20 | Loss 216.40 (recon 206.32 + kl 10.08 * 1.00) | Test 221.23
+  Epoch  21 | Loss 216.15 (recon 206.46 + kl 9.69 * 1.00) | Test 220.63 *
+  Epoch  22 | Loss 216.00 (recon 206.63 + kl 9.37 * 1.00) | Test 220.20 *
+  Epoch  25 | Loss 215.27 (recon 206.25 + kl 9.02 * 1.00) | Test 219.56 *
+  Epoch  29 | Loss 214.64 (recon 206.15 + kl 8.49 * 1.00) | Test 219.44 *
+  Epoch  30 | Loss 214.58 (recon 206.22 + kl 8.36 * 1.00) | Test 219.26 *
+  Epoch  32 | Loss 214.45 (recon 206.22 + kl 8.23 * 1.00) | Test 218.85 *
+  Epoch  34 | Loss 214.30 (recon 206.11 + kl 8.19 * 1.00) | Test 218.54 *
+  Epoch  38 | Loss 213.84 (recon 205.95 + kl 7.89 * 1.00) | Test 218.22 *
+  Epoch  39 | Loss 213.67 (recon 205.69 + kl 7.97 * 1.00) | Test 218.13 *
+  Epoch  40 | Loss 213.68 (recon 205.77 + kl 7.90 * 1.00) | Test 217.77 *
+  Epoch  47 | Loss 212.75 (recon 205.12 + kl 7.63 * 1.00) | Test 217.15 *
+  Epoch  50 | Loss 212.47 (recon 204.81 + kl 7.66 * 1.00) | Test 217.20
+  Epoch  53 | Loss 212.32 (recon 204.67 + kl 7.65 * 1.00) | Test 216.98 *
+  Epoch  54 | Loss 212.20 (recon 204.54 + kl 7.65 * 1.00) | Test 216.72 *
+  Epoch  60 | Loss 211.97 (recon 204.32 + kl 7.65 * 1.00) | Test 216.87
+  Epoch  61 | Loss 211.86 (recon 204.28 + kl 7.58 * 1.00) | Test 216.48 *
+  Epoch  62 | Loss 211.68 (recon 204.03 + kl 7.65 * 1.00) | Test 216.48 *
+  Epoch  63 | Loss 211.75 (recon 204.15 + kl 7.60 * 1.00) | Test 216.47 *
+  Epoch  64 | Loss 211.64 (recon 203.99 + kl 7.65 * 1.00) | Test 216.35 *
+  Epoch  70 | Loss 211.57 (recon 203.91 + kl 7.67 * 1.00) | Test 216.18 *
+  Epoch  74 | Loss 211.40 (recon 203.75 + kl 7.65 * 1.00) | Test 216.03 *
+  Epoch  80 | Loss 211.45 (recon 203.72 + kl 7.72 * 1.00) | Test 216.09
+  Epoch  84 | Loss 211.09 (recon 203.37 + kl 7.72 * 1.00) | Test 216.01 *
+  Epoch  85 | Loss 211.27 (recon 203.59 + kl 7.69 * 1.00) | Test 215.99 *
+  Epoch  87 | Loss 211.19 (recon 203.52 + kl 7.68 * 1.00) | Test 215.96 *
+  Epoch  90 | Loss 211.14 (recon 203.44 + kl 7.70 * 1.00) | Test 216.02
+  Epoch  91 | Loss 211.03 (recon 203.37 + kl 7.67 * 1.00) | Test 215.85 *
+  Epoch  93 | Loss 211.05 (recon 203.40 + kl 7.64 * 1.00) | Test 215.81 *
+  Epoch 100 | Loss 211.00 (recon 203.35 + kl 7.65 * 1.00) | Test 215.85
+  Local topics: 50, diversity: 0.732
+
+  Step 2: Estimating soft LLM priors...
+
+  Step 3: Training soft gate controller...
+  Gates: mean survival=0.464, mean novelty=0.483
+
+  Step 4: Soft-updating fixed global memory...
+  Soft memory updated at T4: K=50, mean survival=0.464, novel mass=24.175
+
+  Step 5: Inferring aligned theta under updated memory...
+  Aligned theta: 18909 docs x 50 topics
+
+  Summary T4 (1999-2001):
+    Local topics: 50
+    Local diversity: 0.732
+    Effective Retained Mass: 23.2, Effective Novel Mass: 24.2
+    Global K = 50 active topics
+    Global diversity: 0.628
+    Wall time: 267.0s
+
+──────────────────────────────────────────────────────────────────────
+TIMESTAMP T5 (2002-2004) — 27256 documents
+──────────────────────────────────────────────────────────────────────
+
+  Step 1: Training local VAE...
+  n_topics = 50 (K_{t-1} = 50)
+  Using residual learning: K_{t-1} = 50 topics
+  Epoch   1 | Loss 232.07 (recon 229.89 + kl 43.73 * 0.05) | Test 267.15 *
+  Epoch   2 | Loss 218.95 (recon 214.85 + kl 41.06 * 0.10) | Test 252.01 *
+  Epoch   3 | Loss 214.29 (recon 208.62 + kl 37.81 * 0.15) | Test 243.84 *
+  Epoch   4 | Loss 212.18 (recon 205.17 + kl 35.02 * 0.20) | Test 234.99 *
+  Epoch   5 | Loss 211.65 (recon 203.60 + kl 32.23 * 0.25) | Test 234.89 *
+  Epoch   6 | Loss 211.65 (recon 202.73 + kl 29.73 * 0.30) | Test 230.74 *
+  Epoch   7 | Loss 211.71 (recon 202.17 + kl 27.24 * 0.35) | Test 228.13 *
+  Epoch   8 | Loss 212.15 (recon 202.05 + kl 25.26 * 0.40) | Test 225.71 *
+  Epoch   9 | Loss 212.60 (recon 202.10 + kl 23.32 * 0.45) | Test 223.61 *
+  Epoch  10 | Loss 213.03 (recon 202.30 + kl 21.46 * 0.50) | Test 222.65 *
+  Epoch  11 | Loss 213.56 (recon 202.71 + kl 19.74 * 0.55) | Test 222.59 *
+  Epoch  12 | Loss 214.15 (recon 203.18 + kl 18.30 * 0.60) | Test 221.22 *
+  Epoch  13 | Loss 214.67 (recon 203.64 + kl 16.97 * 0.65) | Test 219.55 *
+  Epoch  14 | Loss 214.97 (recon 204.01 + kl 15.65 * 0.70) | Test 219.05 *
+  Epoch  15 | Loss 215.36 (recon 204.63 + kl 14.31 * 0.75) | Test 218.51 *
+  Epoch  16 | Loss 215.74 (recon 205.10 + kl 13.31 * 0.80) | Test 218.19 *
+  Epoch  17 | Loss 215.99 (recon 205.48 + kl 12.37 * 0.85) | Test 217.58 *
+  Epoch  18 | Loss 216.56 (recon 206.37 + kl 11.32 * 0.90) | Test 217.17 *
+  Epoch  19 | Loss 216.71 (recon 206.64 + kl 10.59 * 0.95) | Test 217.09 *
+  Epoch  20 | Loss 217.07 (recon 207.46 + kl 9.61 * 1.00) | Test 216.59 *
+  Epoch  21 | Loss 216.65 (recon 207.31 + kl 9.34 * 1.00) | Test 216.32 *
+  Epoch  23 | Loss 216.36 (recon 207.55 + kl 8.81 * 1.00) | Test 216.10 *
+  Epoch  24 | Loss 216.27 (recon 207.69 + kl 8.59 * 1.00) | Test 216.02 *
+  Epoch  25 | Loss 216.17 (recon 207.71 + kl 8.46 * 1.00) | Test 215.80 *
+  Epoch  26 | Loss 216.06 (recon 207.68 + kl 8.38 * 1.00) | Test 215.73 *
+  Epoch  27 | Loss 215.82 (recon 207.56 + kl 8.26 * 1.00) | Test 215.64 *
+  Epoch  28 | Loss 215.72 (recon 207.53 + kl 8.19 * 1.00) | Test 215.53 *
+  Epoch  30 | Loss 215.40 (recon 207.36 + kl 8.05 * 1.00) | Test 215.30 *
+  Epoch  31 | Loss 215.40 (recon 207.45 + kl 7.95 * 1.00) | Test 215.26 *
+  Epoch  33 | Loss 215.23 (recon 207.41 + kl 7.82 * 1.00) | Test 215.10 *
+  Epoch  34 | Loss 215.08 (recon 207.27 + kl 7.82 * 1.00) | Test 215.06 *
+  Epoch  35 | Loss 215.24 (recon 207.52 + kl 7.73 * 1.00) | Test 214.93 *
+  Epoch  36 | Loss 214.88 (recon 207.12 + kl 7.76 * 1.00) | Test 214.90 *
+  Epoch  37 | Loss 214.93 (recon 207.22 + kl 7.71 * 1.00) | Test 214.65 *
+  Epoch  39 | Loss 214.75 (recon 207.11 + kl 7.64 * 1.00) | Test 214.63 *
+  Epoch  40 | Loss 214.80 (recon 207.17 + kl 7.63 * 1.00) | Test 214.72
+  Epoch  41 | Loss 214.54 (recon 206.95 + kl 7.59 * 1.00) | Test 214.25 *
+  Epoch  48 | Loss 213.91 (recon 206.53 + kl 7.38 * 1.00) | Test 213.58 *
+  Epoch  50 | Loss 213.54 (recon 206.14 + kl 7.40 * 1.00) | Test 213.53 *
+  Epoch  53 | Loss 213.55 (recon 206.10 + kl 7.45 * 1.00) | Test 213.37 *
+  Epoch  60 | Loss 213.30 (recon 205.86 + kl 7.44 * 1.00) | Test 213.17 *
+  Epoch  63 | Loss 213.06 (recon 205.62 + kl 7.44 * 1.00) | Test 213.05 *
+  Epoch  67 | Loss 213.08 (recon 205.60 + kl 7.48 * 1.00) | Test 212.95 *
+  Epoch  70 | Loss 213.18 (recon 205.69 + kl 7.50 * 1.00) | Test 213.08
+  Epoch  73 | Loss 213.00 (recon 205.47 + kl 7.53 * 1.00) | Test 212.94 *
+  Epoch  75 | Loss 212.92 (recon 205.40 + kl 7.53 * 1.00) | Test 212.79 *
+  Epoch  80 | Loss 212.79 (recon 205.29 + kl 7.50 * 1.00) | Test 212.76 *
+  Epoch  86 | Loss 212.46 (recon 204.87 + kl 7.59 * 1.00) | Test 212.71 *
+  Epoch  90 | Loss 212.73 (recon 205.12 + kl 7.61 * 1.00) | Test 212.79
+  Epoch  92 | Loss 212.73 (recon 205.13 + kl 7.60 * 1.00) | Test 212.57 *
+  Epoch 100 | Loss 212.59 (recon 204.99 + kl 7.60 * 1.00) | Test 212.67
+  Local topics: 50, diversity: 0.737
+
+  Step 2: Estimating soft LLM priors...
+
+  Step 3: Training soft gate controller...
+  Gates: mean survival=0.551, mean novelty=0.443
+
+  Step 4: Soft-updating fixed global memory...
+  Soft memory updated at T5: K=50, mean survival=0.551, novel mass=22.134
+
+  Step 5: Inferring aligned theta under updated memory...
+  Aligned theta: 27256 docs x 50 topics
+
+  Summary T5 (2002-2004):
+    Local topics: 50
+    Local diversity: 0.737
+    Effective Retained Mass: 27.5, Effective Novel Mass: 22.1
+    Global K = 50 active topics
+    Global diversity: 0.556
+    Wall time: 383.3s
+
+──────────────────────────────────────────────────────────────────────
+TIMESTAMP T6 (2005-2007) — 22419 documents
+──────────────────────────────────────────────────────────────────────
+
+  Step 1: Training local VAE...
+  n_topics = 50 (K_{t-1} = 50)
+  Using residual learning: K_{t-1} = 50 topics
+  Epoch   1 | Loss 337.42 (recon 335.07 + kl 47.15 * 0.05) | Test 384.31 *
+  Epoch   2 | Loss 319.53 (recon 315.18 + kl 43.56 * 0.10) | Test 363.74 *
+  Epoch   3 | Loss 313.14 (recon 307.16 + kl 39.89 * 0.15) | Test 352.38 *
+  Epoch   4 | Loss 309.70 (recon 302.35 + kl 36.76 * 0.20) | Test 347.23 *
+  Epoch   5 | Loss 308.20 (recon 299.62 + kl 34.32 * 0.25) | Test 343.77 *
+  Epoch   6 | Loss 307.17 (recon 297.56 + kl 32.05 * 0.30) | Test 339.02 *
+  Epoch   7 | Loss 307.00 (recon 296.58 + kl 29.77 * 0.35) | Test 335.61 *
+  Epoch   8 | Loss 307.30 (recon 296.20 + kl 27.74 * 0.40) | Test 331.43 *
+  Epoch   9 | Loss 307.34 (recon 295.73 + kl 25.80 * 0.45) | Test 329.89 *
+  Epoch  10 | Loss 307.87 (recon 295.81 + kl 24.13 * 0.50) | Test 328.36 *
+  Epoch  11 | Loss 307.92 (recon 295.49 + kl 22.59 * 0.55) | Test 326.63 *
+  Epoch  12 | Loss 308.37 (recon 295.75 + kl 21.03 * 0.60) | Test 324.59 *
+  Epoch  14 | Loss 309.07 (recon 296.03 + kl 18.62 * 0.70) | Test 323.44 *
+  Epoch  15 | Loss 309.77 (recon 296.78 + kl 17.31 * 0.75) | Test 323.06 *
+  Epoch  16 | Loss 310.11 (recon 297.08 + kl 16.30 * 0.80) | Test 321.97 *
+  Epoch  17 | Loss 310.43 (recon 297.44 + kl 15.28 * 0.85) | Test 321.70 *
+  Epoch  18 | Loss 310.29 (recon 297.38 + kl 14.34 * 0.90) | Test 321.18 *
+  Epoch  19 | Loss 311.04 (recon 298.24 + kl 13.47 * 0.95) | Test 320.70 *
+  Epoch  20 | Loss 311.29 (recon 298.49 + kl 12.79 * 1.00) | Test 320.77
+  Epoch  21 | Loss 310.60 (recon 298.31 + kl 12.29 * 1.00) | Test 320.28 *
+  Epoch  22 | Loss 310.85 (recon 298.79 + kl 12.06 * 1.00) | Test 319.77 *
+  Epoch  24 | Loss 310.38 (recon 298.61 + kl 11.77 * 1.00) | Test 319.73 *
+  Epoch  25 | Loss 309.99 (recon 298.44 + kl 11.55 * 1.00) | Test 319.37 *
+  Epoch  26 | Loss 309.89 (recon 298.46 + kl 11.43 * 1.00) | Test 319.12 *
+  Epoch  27 | Loss 309.78 (recon 298.42 + kl 11.36 * 1.00) | Test 318.77 *
+  Epoch  29 | Loss 309.41 (recon 298.37 + kl 11.04 * 1.00) | Test 318.41 *
+  Epoch  30 | Loss 308.98 (recon 297.93 + kl 11.04 * 1.00) | Test 318.45
+  Epoch  31 | Loss 308.97 (recon 297.98 + kl 10.99 * 1.00) | Test 318.32 *
+  Epoch  33 | Loss 308.61 (recon 297.79 + kl 10.81 * 1.00) | Test 318.02 *
+  Epoch  35 | Loss 308.71 (recon 297.97 + kl 10.75 * 1.00) | Test 317.78 *
+  Epoch  36 | Loss 308.37 (recon 297.72 + kl 10.65 * 1.00) | Test 317.61 *
+  Epoch  39 | Loss 308.08 (recon 297.43 + kl 10.65 * 1.00) | Test 317.45 *
+  Epoch  40 | Loss 308.14 (recon 297.49 + kl 10.65 * 1.00) | Test 317.19 *
+  Epoch  41 | Loss 308.13 (recon 297.46 + kl 10.67 * 1.00) | Test 317.01 *
+  Epoch  43 | Loss 307.90 (recon 297.40 + kl 10.50 * 1.00) | Test 316.80 *
+  Epoch  45 | Loss 307.75 (recon 297.20 + kl 10.56 * 1.00) | Test 316.61 *
+  Epoch  49 | Loss 307.11 (recon 296.53 + kl 10.58 * 1.00) | Test 316.41 *
+  Epoch  50 | Loss 307.54 (recon 297.16 + kl 10.38 * 1.00) | Test 316.75
+  Epoch  51 | Loss 307.17 (recon 296.84 + kl 10.32 * 1.00) | Test 316.33 *
+  Epoch  53 | Loss 306.67 (recon 296.28 + kl 10.39 * 1.00) | Test 316.32 *
+  Epoch  54 | Loss 307.06 (recon 296.77 + kl 10.30 * 1.00) | Test 316.05 *
+  Epoch  59 | Loss 306.59 (recon 296.36 + kl 10.24 * 1.00) | Test 316.00 *
+  Epoch  60 | Loss 306.98 (recon 296.75 + kl 10.23 * 1.00) | Test 315.73 *
+  Epoch  67 | Loss 305.69 (recon 295.62 + kl 10.07 * 1.00) | Test 315.31 *
+  Epoch  68 | Loss 305.47 (recon 295.39 + kl 10.08 * 1.00) | Test 314.99 *
+  Epoch  70 | Loss 305.65 (recon 295.49 + kl 10.16 * 1.00) | Test 315.23
+  Epoch  71 | Loss 305.23 (recon 295.16 + kl 10.07 * 1.00) | Test 314.77 *
+  Epoch  73 | Loss 305.36 (recon 295.19 + kl 10.17 * 1.00) | Test 314.76 *
+  Epoch  75 | Loss 305.16 (recon 295.00 + kl 10.15 * 1.00) | Test 314.71 *
+  Epoch  78 | Loss 305.26 (recon 295.06 + kl 10.20 * 1.00) | Test 314.64 *
+  Epoch  79 | Loss 305.06 (recon 294.86 + kl 10.20 * 1.00) | Test 314.55 *
+  Epoch  80 | Loss 305.13 (recon 294.93 + kl 10.20 * 1.00) | Test 314.55 *
+  Epoch  86 | Loss 305.17 (recon 294.97 + kl 10.19 * 1.00) | Test 314.31 *
+  Epoch  88 | Loss 304.79 (recon 294.57 + kl 10.22 * 1.00) | Test 314.18 *
+  Epoch  89 | Loss 304.54 (recon 294.32 + kl 10.21 * 1.00) | Test 314.18 *
+  Epoch  90 | Loss 304.94 (recon 294.70 + kl 10.25 * 1.00) | Test 314.09 *
+  Epoch  95 | Loss 304.60 (recon 294.30 + kl 10.30 * 1.00) | Test 314.01 *
+  Epoch  96 | Loss 304.70 (recon 294.45 + kl 10.25 * 1.00) | Test 313.98 *
+  Epoch 100 | Loss 304.75 (recon 294.45 + kl 10.30 * 1.00) | Test 313.98
+  Local topics: 50, diversity: 0.739
+
+  Step 2: Estimating soft LLM priors...
+
+  Step 3: Training soft gate controller...
+  Gates: mean survival=0.500, mean novelty=0.484
+
+  Step 4: Soft-updating fixed global memory...
+  Soft memory updated at T6: K=50, mean survival=0.500, novel mass=24.206
+
+  Step 5: Inferring aligned theta under updated memory...
+  Aligned theta: 22419 docs x 50 topics
+
+  Summary T6 (2005-2007):
+    Local topics: 50
+    Local diversity: 0.739
+    Effective Retained Mass: 25.0, Effective Novel Mass: 24.2
+    Global K = 50 active topics
+    Global diversity: 0.516
+    Wall time: 317.9s
+
+──────────────────────────────────────────────────────────────────────
+TIMESTAMP T7 (2008-2010) — 38439 documents
+──────────────────────────────────────────────────────────────────────
+
+  Step 1: Training local VAE...
+  n_topics = 50 (K_{t-1} = 50)
+  Using residual learning: K_{t-1} = 50 topics
+  Epoch   1 | Loss 270.89 (recon 268.61 + kl 45.72 * 0.05) | Test 311.21 *
+  Epoch   2 | Loss 255.58 (recon 251.11 + kl 44.72 * 0.10) | Test 298.86 *
+  Epoch   3 | Loss 250.81 (recon 244.58 + kl 41.50 * 0.15) | Test 287.23 *
+  Epoch   4 | Loss 249.32 (recon 241.74 + kl 37.89 * 0.20) | Test 280.53 *
+  Epoch   5 | Loss 248.71 (recon 240.01 + kl 34.80 * 0.25) | Test 278.51 *
+  Epoch   6 | Loss 248.48 (recon 238.89 + kl 31.95 * 0.30) | Test 274.56 *
+  Epoch   7 | Loss 249.17 (recon 238.85 + kl 29.48 * 0.35) | Test 270.23 *
+  Epoch   8 | Loss 249.77 (recon 238.87 + kl 27.24 * 0.40) | Test 267.84 *
+  Epoch   9 | Loss 250.02 (recon 238.71 + kl 25.15 * 0.45) | Test 266.90 *
+  Epoch  10 | Loss 251.63 (recon 240.09 + kl 23.08 * 0.50) | Test 265.39 *
+  Epoch  11 | Loss 251.37 (recon 239.60 + kl 21.39 * 0.55) | Test 263.84 *
+  Epoch  12 | Loss 252.23 (recon 240.38 + kl 19.74 * 0.60) | Test 263.48 *
+  Epoch  13 | Loss 253.24 (recon 241.38 + kl 18.24 * 0.65) | Test 263.24 *
+  Epoch  14 | Loss 253.19 (recon 241.33 + kl 16.95 * 0.70) | Test 261.14 *
+  Epoch  15 | Loss 253.35 (recon 241.64 + kl 15.62 * 0.75) | Test 260.86 *
+  Epoch  16 | Loss 253.86 (recon 242.26 + kl 14.50 * 0.80) | Test 260.35 *
+  Epoch  17 | Loss 254.41 (recon 243.04 + kl 13.38 * 0.85) | Test 259.70 *
+  Epoch  18 | Loss 254.90 (recon 243.60 + kl 12.56 * 0.90) | Test 259.45 *
+  Epoch  19 | Loss 255.43 (recon 244.45 + kl 11.56 * 0.95) | Test 258.73 *
+  Epoch  20 | Loss 255.09 (recon 244.38 + kl 10.72 * 1.00) | Test 258.74
+  Epoch  21 | Loss 255.11 (recon 244.80 + kl 10.31 * 1.00) | Test 258.50 *
+  Epoch  22 | Loss 254.78 (recon 244.76 + kl 10.02 * 1.00) | Test 258.40 *
+  Epoch  24 | Loss 254.83 (recon 244.98 + kl 9.86 * 1.00) | Test 258.29 *
+  Epoch  25 | Loss 254.52 (recon 245.02 + kl 9.51 * 1.00) | Test 258.08 *
+  Epoch  26 | Loss 254.28 (recon 244.79 + kl 9.49 * 1.00) | Test 257.82 *
+  Epoch  29 | Loss 253.98 (recon 244.75 + kl 9.23 * 1.00) | Test 257.34 *
+  Epoch  30 | Loss 253.97 (recon 244.89 + kl 9.08 * 1.00) | Test 257.86
+  Epoch  33 | Loss 253.77 (recon 244.88 + kl 8.89 * 1.00) | Test 257.21 *
+  Epoch  34 | Loss 253.58 (recon 244.75 + kl 8.83 * 1.00) | Test 257.02 *
+  Epoch  38 | Loss 253.49 (recon 244.78 + kl 8.71 * 1.00) | Test 256.70 *
+  Epoch  40 | Loss 253.05 (recon 244.47 + kl 8.58 * 1.00) | Test 256.75
+  Epoch  41 | Loss 253.65 (recon 245.06 + kl 8.59 * 1.00) | Test 256.52 *
+  Epoch  43 | Loss 252.63 (recon 244.07 + kl 8.56 * 1.00) | Test 256.45 *
+  Epoch  48 | Loss 252.67 (recon 244.15 + kl 8.52 * 1.00) | Test 256.39 *
+  Epoch  50 | Loss 252.55 (recon 244.04 + kl 8.51 * 1.00) | Test 256.26 *
+  Epoch  52 | Loss 252.50 (recon 244.04 + kl 8.46 * 1.00) | Test 256.24 *
+  Epoch  56 | Loss 252.65 (recon 244.19 + kl 8.46 * 1.00) | Test 256.10 *
+  Epoch  58 | Loss 252.51 (recon 244.00 + kl 8.51 * 1.00) | Test 255.74 *
+  Epoch  60 | Loss 252.01 (recon 243.58 + kl 8.43 * 1.00) | Test 256.11
+  Epoch  64 | Loss 251.88 (recon 243.45 + kl 8.43 * 1.00) | Test 255.69 *
+  Epoch  67 | Loss 252.55 (recon 244.11 + kl 8.44 * 1.00) | Test 255.69 *
+  Epoch  69 | Loss 251.88 (recon 243.40 + kl 8.48 * 1.00) | Test 255.59 *
+  Epoch  70 | Loss 252.11 (recon 243.62 + kl 8.49 * 1.00) | Test 255.93
+  Epoch  72 | Loss 251.66 (recon 243.16 + kl 8.51 * 1.00) | Test 255.59 *
+  Epoch  73 | Loss 251.97 (recon 243.46 + kl 8.51 * 1.00) | Test 255.48 *
+  Epoch  74 | Loss 252.19 (recon 243.70 + kl 8.49 * 1.00) | Test 255.46 *
+  Epoch  77 | Loss 251.83 (recon 243.33 + kl 8.50 * 1.00) | Test 255.46 *
+  Epoch  79 | Loss 251.65 (recon 243.13 + kl 8.52 * 1.00) | Test 255.42 *
+  Epoch  80 | Loss 252.01 (recon 243.49 + kl 8.52 * 1.00) | Test 255.35 *
+  Epoch  83 | Loss 251.98 (recon 243.45 + kl 8.53 * 1.00) | Test 255.25 *
+  Epoch  84 | Loss 251.84 (recon 243.32 + kl 8.52 * 1.00) | Test 255.19 *
+  Epoch  90 | Loss 252.22 (recon 243.65 + kl 8.57 * 1.00) | Test 255.34
+  Epoch  91 | Loss 251.65 (recon 243.13 + kl 8.51 * 1.00) | Test 254.80 *
+  Epoch  94 | Loss 251.35 (recon 242.72 + kl 8.64 * 1.00) | Test 254.71 *
+  Epoch  95 | Loss 251.03 (recon 242.40 + kl 8.63 * 1.00) | Test 254.65 *
+  Epoch  99 | Loss 251.36 (recon 242.71 + kl 8.65 * 1.00) | Test 254.53 *
+  Epoch 100 | Loss 251.11 (recon 242.48 + kl 8.62 * 1.00) | Test 254.54
+  Local topics: 50, diversity: 0.787
+
+  Step 2: Estimating soft LLM priors...
+
+  Step 3: Training soft gate controller...
+  Gates: mean survival=0.454, mean novelty=0.526
+
+  Step 4: Soft-updating fixed global memory...
+  Soft memory updated at T7: K=50, mean survival=0.454, novel mass=26.318
+
+  Step 5: Inferring aligned theta under updated memory...
+  Aligned theta: 38439 docs x 50 topics
+
+  Summary T7 (2008-2010):
+    Local topics: 50
+    Local diversity: 0.787
+    Effective Retained Mass: 22.7, Effective Novel Mass: 26.3
+    Global K = 50 active topics
+    Global diversity: 0.512
+    Wall time: 532.0s
+
+──────────────────────────────────────────────────────────────────────
+TIMESTAMP T8 (2011-2013) — 52051 documents
+──────────────────────────────────────────────────────────────────────
+
+  Step 1: Training local VAE...
+  n_topics = 50 (K_{t-1} = 50)
+  Using residual learning: K_{t-1} = 50 topics
+  Epoch   1 | Loss 266.09 (recon 262.86 + kl 64.65 * 0.05) | Test 303.24 *
+  Epoch   2 | Loss 250.07 (recon 245.36 + kl 47.06 * 0.10) | Test 286.93 *
+  Epoch   3 | Loss 246.27 (recon 239.77 + kl 43.29 * 0.15) | Test 279.30 *
+  Epoch   4 | Loss 245.20 (recon 237.30 + kl 39.54 * 0.20) | Test 273.47 *
+  Epoch   5 | Loss 245.05 (recon 236.09 + kl 35.81 * 0.25) | Test 269.04 *
+  Epoch   6 | Loss 245.59 (recon 235.75 + kl 32.79 * 0.30) | Test 268.15 *
+  Epoch   7 | Loss 246.12 (recon 235.66 + kl 29.88 * 0.35) | Test 262.04 *
+  Epoch   8 | Loss 246.80 (recon 235.88 + kl 27.31 * 0.40) | Test 261.21 *
+  Epoch   9 | Loss 247.71 (recon 236.44 + kl 25.03 * 0.45) | Test 258.77 *
+  Epoch  10 | Loss 248.31 (recon 236.86 + kl 22.90 * 0.50) | Test 257.17 *
+  Epoch  11 | Loss 248.99 (recon 237.40 + kl 21.08 * 0.55) | Test 255.98 *
+  Epoch  12 | Loss 249.79 (recon 238.21 + kl 19.31 * 0.60) | Test 254.49 *
+  Epoch  14 | Loss 250.67 (recon 239.23 + kl 16.34 * 0.70) | Test 253.82 *
+  Epoch  15 | Loss 251.41 (recon 240.13 + kl 15.04 * 0.75) | Test 252.91 *
+  Epoch  16 | Loss 251.82 (recon 240.71 + kl 13.89 * 0.80) | Test 252.81 *
+  Epoch  17 | Loss 252.35 (recon 241.44 + kl 12.83 * 0.85) | Test 252.56 *
+  Epoch  18 | Loss 252.79 (recon 242.14 + kl 11.83 * 0.90) | Test 252.12 *
+  Epoch  19 | Loss 253.05 (recon 242.69 + kl 10.91 * 0.95) | Test 252.01 *
+  Epoch  20 | Loss 253.27 (recon 243.10 + kl 10.17 * 1.00) | Test 251.34 *
+  Epoch  23 | Loss 253.03 (recon 243.81 + kl 9.22 * 1.00) | Test 251.02 *
+  Epoch  26 | Loss 252.54 (recon 243.74 + kl 8.80 * 1.00) | Test 250.95 *
+  Epoch  27 | Loss 252.30 (recon 243.59 + kl 8.71 * 1.00) | Test 250.80 *
+  Epoch  28 | Loss 252.17 (recon 243.53 + kl 8.64 * 1.00) | Test 250.79 *
+  Epoch  29 | Loss 252.01 (recon 243.44 + kl 8.57 * 1.00) | Test 250.62 *
+  Epoch  30 | Loss 251.98 (recon 243.51 + kl 8.47 * 1.00) | Test 250.62 *
+  Epoch  31 | Loss 251.98 (recon 243.55 + kl 8.42 * 1.00) | Test 250.45 *
+  Epoch  33 | Loss 251.91 (recon 243.51 + kl 8.40 * 1.00) | Test 250.06 *
+  Epoch  38 | Loss 251.13 (recon 242.95 + kl 8.18 * 1.00) | Test 249.96 *
+  Epoch  39 | Loss 251.40 (recon 243.23 + kl 8.17 * 1.00) | Test 249.90 *
+  Epoch  40 | Loss 251.23 (recon 243.08 + kl 8.15 * 1.00) | Test 250.03
+  Epoch  41 | Loss 251.34 (recon 243.20 + kl 8.14 * 1.00) | Test 249.81 *
+  Epoch  43 | Loss 251.35 (recon 243.20 + kl 8.15 * 1.00) | Test 249.67 *
+  Epoch  46 | Loss 251.14 (recon 243.06 + kl 8.08 * 1.00) | Test 249.59 *
+  Epoch  48 | Loss 250.93 (recon 242.86 + kl 8.07 * 1.00) | Test 249.52 *
+  Epoch  50 | Loss 250.86 (recon 242.72 + kl 8.14 * 1.00) | Test 249.53
+  Epoch  52 | Loss 250.84 (recon 242.69 + kl 8.15 * 1.00) | Test 249.36 *
+  Epoch  55 | Loss 250.98 (recon 242.88 + kl 8.11 * 1.00) | Test 249.32 *
+  Epoch  57 | Loss 250.57 (recon 242.45 + kl 8.11 * 1.00) | Test 249.21 *
+  Epoch  59 | Loss 250.62 (recon 242.51 + kl 8.11 * 1.00) | Test 249.14 *
+  Epoch  60 | Loss 250.64 (recon 242.53 + kl 8.10 * 1.00) | Test 249.31
+  Epoch  62 | Loss 250.51 (recon 242.38 + kl 8.13 * 1.00) | Test 249.02 *
+  Epoch  65 | Loss 250.39 (recon 242.26 + kl 8.14 * 1.00) | Test 248.92 *
+  Epoch  70 | Loss 250.42 (recon 242.29 + kl 8.14 * 1.00) | Test 248.83 *
+  Epoch  74 | Loss 250.39 (recon 242.21 + kl 8.18 * 1.00) | Test 248.80 *
+  Epoch  77 | Loss 250.34 (recon 242.19 + kl 8.15 * 1.00) | Test 248.60 *
+  Epoch  80 | Loss 250.50 (recon 242.36 + kl 8.14 * 1.00) | Test 248.68
+  Epoch  84 | Loss 249.95 (recon 241.75 + kl 8.20 * 1.00) | Test 248.37 *
+  Epoch  85 | Loss 249.72 (recon 241.53 + kl 8.19 * 1.00) | Test 248.32 *
+  Epoch  86 | Loss 249.89 (recon 241.69 + kl 8.19 * 1.00) | Test 248.16 *
+  Epoch  89 | Loss 249.76 (recon 241.53 + kl 8.23 * 1.00) | Test 248.12 *
+  Epoch  90 | Loss 249.91 (recon 241.64 + kl 8.28 * 1.00) | Test 248.10 *
+  Epoch  92 | Loss 249.83 (recon 241.58 + kl 8.25 * 1.00) | Test 248.00 *
+  Epoch  99 | Loss 249.65 (recon 241.36 + kl 8.29 * 1.00) | Test 247.95 *
+  Epoch 100 | Loss 249.43 (recon 241.11 + kl 8.32 * 1.00) | Test 247.90 *
+  Local topics: 50, diversity: 0.817
+
+  Step 2: Estimating soft LLM priors...
+
+  Step 3: Training soft gate controller...
+  Gates: mean survival=0.499, mean novelty=0.564
+
+  Step 4: Soft-updating fixed global memory...
+  Soft memory updated at T8: K=50, mean survival=0.499, novel mass=28.202
+
+  Step 5: Inferring aligned theta under updated memory...
+  Aligned theta: 52051 docs x 50 topics
+
+  Summary T8 (2011-2013):
+    Local topics: 50
+    Local diversity: 0.817
+    Effective Retained Mass: 24.9, Effective Novel Mass: 28.2
+    Global K = 50 active topics
+    Global diversity: 0.493
+    Wall time: 719.4s
+
+──────────────────────────────────────────────────────────────────────
+TIMESTAMP T9 (2014-2016) — 70082 documents
+──────────────────────────────────────────────────────────────────────
+
+  Step 1: Training local VAE...
+  n_topics = 50 (K_{t-1} = 50)
+  Using residual learning: K_{t-1} = 50 topics
+  Epoch   1 | Loss 265.04 (recon 262.19 + kl 57.02 * 0.05) | Test 297.17 *
+  Epoch   2 | Loss 249.70 (recon 244.77 + kl 49.30 * 0.10) | Test 285.85 *
+  Epoch   3 | Loss 246.61 (recon 239.85 + kl 45.09 * 0.15) | Test 276.60 *
+  Epoch   4 | Loss 246.25 (recon 238.09 + kl 40.84 * 0.20) | Test 268.28 *
+  Epoch   5 | Loss 246.58 (recon 237.36 + kl 36.90 * 0.25) | Test 265.11 *
+  Epoch   6 | Loss 247.31 (recon 237.25 + kl 33.56 * 0.30) | Test 262.12 *
+  Epoch   7 | Loss 248.16 (recon 237.47 + kl 30.52 * 0.35) | Test 258.86 *
+  Epoch   8 | Loss 249.00 (recon 237.93 + kl 27.67 * 0.40) | Test 256.65 *
+  Epoch   9 | Loss 249.94 (recon 238.55 + kl 25.31 * 0.45) | Test 255.30 *
+  Epoch  10 | Loss 250.70 (recon 239.17 + kl 23.07 * 0.50) | Test 255.17 *
+  Epoch  11 | Loss 251.41 (recon 239.78 + kl 21.14 * 0.55) | Test 252.61 *
+  Epoch  12 | Loss 252.15 (recon 240.59 + kl 19.26 * 0.60) | Test 251.50 *
+  Epoch  13 | Loss 252.76 (recon 241.30 + kl 17.64 * 0.65) | Test 250.60 *
+  Epoch  14 | Loss 253.30 (recon 241.95 + kl 16.21 * 0.70) | Test 250.37 *
+  Epoch  15 | Loss 253.87 (recon 242.75 + kl 14.83 * 0.75) | Test 249.20 *
+  Epoch  16 | Loss 254.30 (recon 243.40 + kl 13.62 * 0.80) | Test 248.60 *
+  Epoch  18 | Loss 255.12 (recon 244.73 + kl 11.54 * 0.90) | Test 248.04 *
+  Epoch  19 | Loss 255.42 (recon 245.32 + kl 10.63 * 0.95) | Test 248.02 *
+  Epoch  20 | Loss 255.74 (recon 245.92 + kl 9.82 * 1.00) | Test 247.98 *
+  Epoch  21 | Loss 255.58 (recon 246.20 + kl 9.38 * 1.00) | Test 247.74 *
+  Epoch  24 | Loss 255.17 (recon 246.31 + kl 8.86 * 1.00) | Test 247.39 *
+  Epoch  26 | Loss 255.06 (recon 246.40 + kl 8.66 * 1.00) | Test 247.24 *
+  Epoch  27 | Loss 254.94 (recon 246.41 + kl 8.53 * 1.00) | Test 247.22 *
+  Epoch  29 | Loss 254.76 (recon 246.38 + kl 8.39 * 1.00) | Test 247.00 *
+  Epoch  30 | Loss 254.73 (recon 246.31 + kl 8.42 * 1.00) | Test 246.81 *
+  Epoch  33 | Loss 254.52 (recon 246.27 + kl 8.25 * 1.00) | Test 246.80 *
+  Epoch  35 | Loss 254.35 (recon 246.13 + kl 8.22 * 1.00) | Test 246.75 *
+  Epoch  36 | Loss 254.36 (recon 246.15 + kl 8.21 * 1.00) | Test 246.52 *
+  Epoch  38 | Loss 254.29 (recon 246.11 + kl 8.18 * 1.00) | Test 246.48 *
+  Epoch  39 | Loss 254.30 (recon 246.14 + kl 8.16 * 1.00) | Test 246.47 *
+  Epoch  40 | Loss 254.15 (recon 245.97 + kl 8.18 * 1.00) | Test 246.54
+  Epoch  42 | Loss 254.11 (recon 245.95 + kl 8.16 * 1.00) | Test 246.32 *
+  Epoch  45 | Loss 254.02 (recon 245.86 + kl 8.16 * 1.00) | Test 246.12 *
+  Epoch  47 | Loss 253.95 (recon 245.84 + kl 8.12 * 1.00) | Test 246.04 *
+  Epoch  50 | Loss 253.83 (recon 245.67 + kl 8.15 * 1.00) | Test 245.99 *
+  Epoch  51 | Loss 253.84 (recon 245.69 + kl 8.14 * 1.00) | Test 245.91 *
+  Epoch  55 | Loss 253.80 (recon 245.66 + kl 8.14 * 1.00) | Test 245.85 *
+  Epoch  58 | Loss 253.57 (recon 245.43 + kl 8.15 * 1.00) | Test 245.76 *
+  Epoch  60 | Loss 253.56 (recon 245.37 + kl 8.18 * 1.00) | Test 245.68 *
+  Epoch  64 | Loss 253.52 (recon 245.32 + kl 8.20 * 1.00) | Test 245.64 *
+  Epoch  66 | Loss 253.51 (recon 245.34 + kl 8.17 * 1.00) | Test 245.62 *
+  Epoch  67 | Loss 253.46 (recon 245.27 + kl 8.19 * 1.00) | Test 245.55 *
+  Epoch  70 | Loss 253.40 (recon 245.19 + kl 8.21 * 1.00) | Test 245.45 *
+  Epoch  77 | Loss 253.06 (recon 244.90 + kl 8.16 * 1.00) | Test 245.10 *
+  Epoch  79 | Loss 252.97 (recon 244.73 + kl 8.23 * 1.00) | Test 245.03 *
+  Epoch  80 | Loss 252.84 (recon 244.61 + kl 8.24 * 1.00) | Test 245.07
+  Epoch  84 | Loss 252.82 (recon 244.53 + kl 8.29 * 1.00) | Test 244.94 *
+  Epoch  85 | Loss 252.78 (recon 244.46 + kl 8.31 * 1.00) | Test 244.92 *
+  Epoch  90 | Loss 252.78 (recon 244.45 + kl 8.34 * 1.00) | Test 244.88 *
+  Epoch  94 | Loss 252.72 (recon 244.34 + kl 8.37 * 1.00) | Test 244.86 *
+  Epoch  96 | Loss 252.68 (recon 244.31 + kl 8.36 * 1.00) | Test 244.78 *
+  Epoch 100 | Loss 252.74 (recon 244.38 + kl 8.36 * 1.00) | Test 244.88
+  Local topics: 50, diversity: 0.817
+
+  Step 2: Estimating soft LLM priors...
+
+  Step 3: Training soft gate controller...
+  Gates: mean survival=0.485, mean novelty=0.438
+
+  Step 4: Soft-updating fixed global memory...
+  Soft memory updated at T9: K=50, mean survival=0.485, novel mass=21.880
+
+  Step 5: Inferring aligned theta under updated memory...
+  Aligned theta: 70082 docs x 50 topics
+
+  Summary T9 (2014-2016):
+    Local topics: 50
+    Local diversity: 0.817
+    Effective Retained Mass: 24.2, Effective Novel Mass: 21.9
+    Global K = 50 active topics
+    Global diversity: 0.461
+    Wall time: 954.1s
+
+──────────────────────────────────────────────────────────────────────
+TIMESTAMP T10 (2017-2019) — 187903 documents
+──────────────────────────────────────────────────────────────────────
+
+  Step 1: Training local VAE...
+  n_topics = 50 (K_{t-1} = 50)
+  Using residual learning: K_{t-1} = 50 topics
+  Epoch   1 | Loss 244.82 (recon 241.64 + kl 63.57 * 0.05) | Test 297.92 *
+  Epoch   2 | Loss 233.32 (recon 227.36 + kl 59.52 * 0.10) | Test 281.99 *
+  Epoch   3 | Loss 233.40 (recon 225.59 + kl 52.07 * 0.15) | Test 271.77 *
+  Epoch   4 | Loss 234.52 (recon 225.36 + kl 45.79 * 0.20) | Test 264.49 *
+  Epoch   5 | Loss 235.96 (recon 225.82 + kl 40.56 * 0.25) | Test 262.33 *
+  Epoch   6 | Loss 237.28 (recon 226.42 + kl 36.21 * 0.30) | Test 257.56 *
+  Epoch   7 | Loss 238.57 (recon 227.24 + kl 32.36 * 0.35) | Test 252.74 *
+  Epoch   8 | Loss 239.75 (recon 228.10 + kl 29.12 * 0.40) | Test 251.67 *
+  Epoch   9 | Loss 240.83 (recon 229.04 + kl 26.20 * 0.45) | Test 250.28 *
+  Epoch  10 | Loss 241.81 (recon 229.94 + kl 23.74 * 0.50) | Test 248.71 *
+  Epoch  11 | Loss 242.73 (recon 230.90 + kl 21.51 * 0.55) | Test 247.97 *
+  Epoch  12 | Loss 243.53 (recon 231.82 + kl 19.51 * 0.60) | Test 246.95 *
+  Epoch  13 | Loss 244.28 (recon 232.74 + kl 17.75 * 0.65) | Test 245.83 *
+  Epoch  15 | Loss 245.57 (recon 234.50 + kl 14.76 * 0.75) | Test 244.81 *
+  Epoch  17 | Loss 246.58 (recon 236.02 + kl 12.43 * 0.85) | Test 244.72 *
+  Epoch  18 | Loss 247.06 (recon 236.78 + kl 11.42 * 0.90) | Test 244.43 *
+  Epoch  19 | Loss 247.51 (recon 237.50 + kl 10.54 * 0.95) | Test 244.37 *
+  Epoch  20 | Loss 247.87 (recon 238.13 + kl 9.74 * 1.00) | Test 244.14 *
+  Epoch  22 | Loss 247.67 (recon 238.43 + kl 9.24 * 1.00) | Test 244.06 *
+  Epoch  23 | Loss 247.58 (recon 238.49 + kl 9.09 * 1.00) | Test 243.96 *
+  Epoch  26 | Loss 247.35 (recon 238.52 + kl 8.83 * 1.00) | Test 243.74 *
+  Epoch  28 | Loss 247.25 (recon 238.54 + kl 8.71 * 1.00) | Test 243.70 *
+  Epoch  29 | Loss 247.26 (recon 238.57 + kl 8.69 * 1.00) | Test 243.68 *
+  Epoch  30 | Loss 247.20 (recon 238.55 + kl 8.65 * 1.00) | Test 243.72
+  Epoch  31 | Loss 247.15 (recon 238.53 + kl 8.62 * 1.00) | Test 243.51 *
+  Epoch  32 | Loss 247.13 (recon 238.51 + kl 8.62 * 1.00) | Test 243.44 *
+  Epoch  36 | Loss 246.95 (recon 238.40 + kl 8.55 * 1.00) | Test 243.43 *
+  Epoch  37 | Loss 246.92 (recon 238.36 + kl 8.55 * 1.00) | Test 243.35 *
+  Epoch  38 | Loss 246.91 (recon 238.38 + kl 8.53 * 1.00) | Test 243.31 *
+  Epoch  40 | Loss 246.84 (recon 238.31 + kl 8.53 * 1.00) | Test 243.45
+  Epoch  42 | Loss 246.81 (recon 238.29 + kl 8.51 * 1.00) | Test 243.21 *
+  Epoch  44 | Loss 246.73 (recon 238.22 + kl 8.51 * 1.00) | Test 243.15 *
+  Epoch  46 | Loss 246.71 (recon 238.19 + kl 8.52 * 1.00) | Test 243.13 *
+  Epoch  50 | Loss 246.63 (recon 238.13 + kl 8.50 * 1.00) | Test 243.20
+  Epoch  51 | Loss 246.39 (recon 237.88 + kl 8.51 * 1.00) | Test 242.67 *
+  Epoch  57 | Loss 246.21 (recon 237.61 + kl 8.60 * 1.00) | Test 242.60 *
+  Epoch  60 | Loss 246.23 (recon 237.63 + kl 8.60 * 1.00) | Test 242.54 *
+  Epoch  67 | Loss 246.05 (recon 237.40 + kl 8.65 * 1.00) | Test 242.40 *
+  Epoch  68 | Loss 245.99 (recon 237.34 + kl 8.65 * 1.00) | Test 242.38 *
+  Epoch  69 | Loss 245.98 (recon 237.30 + kl 8.68 * 1.00) | Test 242.30 *
+  Epoch  70 | Loss 246.00 (recon 237.34 + kl 8.66 * 1.00) | Test 242.37
+  Epoch  76 | Loss 245.88 (recon 237.18 + kl 8.70 * 1.00) | Test 242.29 *
+  Epoch  77 | Loss 245.88 (recon 237.18 + kl 8.70 * 1.00) | Test 242.24 *
+  Epoch  80 | Loss 245.85 (recon 237.11 + kl 8.73 * 1.00) | Test 242.25
+  Epoch  81 | Loss 245.86 (recon 237.12 + kl 8.73 * 1.00) | Test 242.20 *
+  Epoch  90 | Loss 245.78 (recon 237.04 + kl 8.74 * 1.00) | Test 242.16 *
+  Epoch  91 | Loss 245.77 (recon 237.02 + kl 8.75 * 1.00) | Test 242.16 *
+  Epoch  95 | Loss 245.76 (recon 237.01 + kl 8.75 * 1.00) | Test 242.15 *
+  Epoch  97 | Loss 245.77 (recon 236.99 + kl 8.78 * 1.00) | Test 242.12 *
+  Epoch  99 | Loss 245.76 (recon 237.00 + kl 8.76 * 1.00) | Test 242.11 *
+  Epoch 100 | Loss 245.74 (recon 236.97 + kl 8.77 * 1.00) | Test 242.17
+  Local topics: 50, diversity: 0.856
+
+  Step 2: Estimating soft LLM priors...
+
+  Step 3: Training soft gate controller...
+  Gates: mean survival=0.500, mean novelty=0.500
+
+  Step 4: Soft-updating fixed global memory...
+  Soft memory updated at T10: K=50, mean survival=0.500, novel mass=24.986
+
+  Step 5: Inferring aligned theta under updated memory...
+  Aligned theta: 187903 docs x 50 topics
+
+  Summary T10 (2017-2019):
+    Local topics: 50
+    Local diversity: 0.856
+    Effective Retained Mass: 25.0, Effective Novel Mass: 25.0
+    Global K = 50 active topics
+    Global diversity: 0.475
+    Wall time: 2546.4s
+
+======================================================================
+PIPELINE COMPLETE
+======================================================================
+Final global topics: K = 50
+
+Topic evolution:
+  T 0 (1987-1989): + 50 novel, -  0 removed, =  0 retained → K_0 = 50
+  T 1 (1990-1992): + 24.9 effective novel, = 25.2 effective retained → K_1 = 50 (fixed slots)
+  T 2 (1993-1995): + 20.7 effective novel, = 26.6 effective retained → K_2 = 50 (fixed slots)
+  T 3 (1996-1998): + 23.8 effective novel, = 27.9 effective retained → K_3 = 50 (fixed slots)
+  T 4 (1999-2001): + 24.2 effective novel, = 23.2 effective retained → K_4 = 50 (fixed slots)
+  T 5 (2002-2004): + 22.1 effective novel, = 27.5 effective retained → K_5 = 50 (fixed slots)
+  T 6 (2005-2007): + 24.2 effective novel, = 25.0 effective retained → K_6 = 50 (fixed slots)
+  T 7 (2008-2010): + 26.3 effective novel, = 22.7 effective retained → K_7 = 50 (fixed slots)
+  T 8 (2011-2013): + 28.2 effective novel, = 24.9 effective retained → K_8 = 50 (fixed slots)
+  T 9 (2014-2016): + 21.9 effective novel, = 24.2 effective retained → K_9 = 50 (fixed slots)
+  T10 (2017-2019): + 25.0 effective novel, = 25.0 effective retained → K_10 = 50 (fixed slots)
+
+Global Memory: K = 50 active topics
+  [  0 | id   0] modelled, apply, relevant, approximate, require, simulate, understood, applying, approximation, clustered, method, approximately, estimate, simulation, simulated
+  [  1 | id   1] gives, estimator, statistic, depend, estimators, expectation, likelihood, reasonably, likelihoods, distribution, understood, expect, approximately, chance, bayesian
+  [  2 | id   2] squared, simulate, orthogonal, orthogonality, requirement, estimate, simulation, samples, approximation, approximate, sample, algorithm, estimator, sampling, modelled
+  [  3 | id   3] likelihood, likelihoods, bayesian, expectation, posterior, estimator, estimate, estimators, posteriors, estimation, estimates, expect, estimated, bayes, denotes
+  [  4 | id   4] vote, distribution, cdf, estimator, approximation, densities, found, understood, require, implementation, gives, expectation, estimate, chain, apply
+  [  5 | id   5] backpropagation, predicting, described, interesting, sequence, simulated, simulation, simulating, proved, requirements, simulate, modelled, years, interestingly, predict
+  [  6 | id   6] simulation, understood, simulate, found, simulated, simulating, simulations, modelled, modelling, modeling, complicated, interesting, understand, modeled, implementation
+  [  7 | id   7] estimator, estimators, variance, gaussian, estimate, expectation, squared, variances, statistic, gaussians, estimates, estimation, covariance, orthogonality, covariances
+  [  8 | id   8] nodes, denotes, node, adjacency, counts, notation, accepted, diagram, labeling, vertices, indicates, submitted, start, calculated, partition
+  [  9 | id   9] cortical, neurophysiology, stimuli, stimulation, stimulus, physiological, fmri, psychophysical, neuroscience, bci, hippocampal, hippocampus, neuronal, auditory, brain
+  [ 10 | id  10] estimation, estimate, estimates, likelihoods, estimator, likelihood, wavelets, estimators, estimated, gaussian, estimating, gaussians, expectation, gives, compared
+  [ 11 | id  11] squared, orthogonality, orthogonal, simulate, samples, requirement, sample, approximation, estimate, approximate, find, estimator, gives, sparseness, algorithm
+  [ 12 | id  12] simoncelli, simonyan, khosla, bianchi, kohonen, antonoglou, abadi, langford, arthur, hofmann, andreas, ravikumar, richard, zoubin, duchi
+  [ 13 | id  13] conclude, outer, satisfies, perfectly, hyperplanes, intersection, indicated, convex, trivially, routing, multipliers, justify, successfully, solvable, implies
+  [ 14 | id  14] result, gives, bound, showed, ratio, quantile, conversion, requirement, counts, found, converting, convert, successfully, figure, anytime
+  [ 15 | id  15] lemma, bound, expectation, corollary, proposition, estimator, supremum, subgraph, inequality, expect, lemmas, posterior, proves, conclude, theorem
+  [ 16 | id  16] bayesian, estimator, estimators, discriminator, segmentation, constrained, speech, signal, deconvolution, distributions, thanks, discriminators, wavelets, probabilistic, constraint
+  [ 17 | id  17] bound, trivially, reasonably, gives, relevant, bounding, classifier, proved, agree, requirement, subsection, bounds, require, convexity, subset
+  [ 18 | id  18] matlab, estimator, simulation, plotted, figure, loop, ran, axis, estimate, estimators, simulate, estimation, iteration, help, frequencies
+  [ 19 | id  19] semantic, semantics, annotations, interpretations, semantically, annotation, recognizing, contextual, structured, ways, entities, recognize, conceptual, annotated, contexts
+  [ 20 | id  20] lemma, backpropagation, estimator, expectation, verify, gives, bound, subgraph, proved, satisfies, proposition, estimators, pass, proof, equals
+  [ 21 | id  21] expectation, calculation, modelled, distributions, distribution, calculating, saw, estimator, formula, calculate, apply, squared, formulas, simulation, likelihood
+  [ 22 | id  22] varies, compared, found, tested, predicted, demonstrated, resulted, result, simulation, gives, algorithm, gave, simulated, obtained, proved
+  [ 23 | id  23] vote, unlike, minimum, added, voting, minimized, generate, way, like, minimize, find, help, found, supervised, sent
+  [ 24 | id  24] depend, estimate, approximately, varies, understood, true, apply, relevant, sample, sampling, samples, variant, distribution, gives, roughly
+  [ 25 | id  25] simulation, depicts, plotted, simulated, colors, axis, colored, figure, lines, simulations, yellow, indicates, white, centroid, gray
+  [ 26 | id  26] realistic, advice, effectively, ways, cars, having, vehicle, exploring, driven, strategies, apparently, poorly, provides, asking, opinion
+  [ 27 | id  27] realistic, simulated, interesting, simulations, simulation, simulating, relevant, reasonably, simulate, methods, crucially, plausible, computationally, excellent, requires
+  [ 28 | id  28] play, strategy, payoffs, guaranteed, payoff, bandit, pulls, equilibrium, pomdps, plays, played, strategic, chooses, demand, game
+  [ 29 | id  29] relevant, depend, simulation, modelled, typical, estimates, methods, findings, understood, modelling, estimate, results, important, covariate, detailed
+  [ 30 | id  30] notation, notations, notational, denote, denotes, imply, apply, symbol, count, measurable, indistinguishable, corresponding, expresses, gamma, corresponds
+  [ 31 | id  31] find, nearest, simulate, apply, squared, sampling, requirement, approximation, found, modelled, samples, sample, approximator, distance, estimate
+  [ 32 | id  32] expectation, estimate, estimator, estimators, estimation, gaussian, approximation, estimates, likelihood, gaussians, subsampled, matlab, approximate, likelihoods, simulate
+  [ 33 | id  33] squared, simulate, estimate, requirement, approximation, orthogonal, orthogonality, approximate, result, simulation, estimator, approximately, varies, simulated, gives
+  [ 34 | id  34] hessian, gives, drawbacks, estimator, approximately, perturbation, bound, asymptotically, convexity, try, attempt, approximation, estimate, squared, asymptotic
+  [ 35 | id  35] found, free, requires, depend, range, find, required, stereo, problem, device, estimate, video, sensing, requirement, wants
+  [ 36 | id  36] estimator, expectation, posterior, estimate, likelihood, estimators, estimation, likelihoods, expect, posteriors, estimates, bayesian, gives, bound, posteriori
+  [ 37 | id  37] estimate, compared, approximately, varies, simulation, estimation, sampling, estimates, approximate, sample, predicted, simulations, approximation, samples, estimator
+  [ 38 | id  38] denotes, likelihood, denote, expectation, likelihoods, denoted, calculated, notation, estimator, equals, calculation, minimize, backpropagation, specified, distribution
+  [ 39 | id  39] compared, compare, compares, ran, comparing, evaluations, evaluated, counts, evaluation, differs, tests, performance, rmse, tested, differ
+  [ 40 | id  40] nodes, requirement, required, requirements, showed, found, gives, help, node, requires, simulation, result, understood, varies, diagram
+  [ 41 | id  41] neurophysiology, neuronal, spiking, neuron, neurons, synapses, hippocampus, stimulus, hippocampal, excitation, cortical, synapse, signals, postsynaptic, bci
+  [ 42 | id  42] expectation, estimator, estimate, likelihood, estimators, estimation, statistic, posterior, estimates, bound, expect, likelihoods, lemma, calculated, calculation
+  [ 43 | id  43] requires, run, ran, simulation, required, calculation, counts, calculations, setup, simulate, require, processor, runs, calculated, compute
+  [ 44 | id  44] modelled, likelihood, likelihoods, distribution, relevant, covariate, apply, understood, densities, applying, distributions, nodes, expectation, bayesian, statistic
+  [ 45 | id  45] simulation, varies, phase, showed, required, duration, simulated, depend, demonstrated, requirement, evidence, years, increased, estimate, requirements
+  [ 46 | id  46] squared, orthogonality, orthogonal, simulate, requirement, simulation, estimate, approximation, samples, approximate, result, simulating, algorithm, varies, sample
+  [ 47 | id  47] estimate, estimation, found, estimator, specified, estimates, simulation, understood, gained, key, obtained, range, conversion, video, calculated
+  [ 48 | id  48] thank, funded, thanks, grant, helpful, grants, funding, researchers, comments, acknowledgements, contribution, research, developments, project, grateful
+  [ 49 | id  49] orthogonality, orthogonal, estimate, simulate, requirement, squared, samples, approximately, result, simulating, approximation, sample, estimator, simulation, approximate
+
+Results saved to outputs/

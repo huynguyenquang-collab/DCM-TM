@@ -40,18 +40,24 @@ topics:
   similarity_threshold: 0.7
 
 llm:
-  # Provider: "gemini" or "none" (skip LLM, use similarity-based fallback)
-  provider: "gemini"
-  # Model name (for Gemini)
-  model: "gemini-2.0-flash"
+  # Provider: "nim", "gemini" or "none" (skip LLM, use similarity-based fallback)
+  provider: "nim"
+  # Model name for the selected provider
+  model: "gpt-oss-120b"
   # Temperature for LLM calls
   temperature: 0.1
   # Max tokens per response
   max_tokens: 1024
   # Rate limiting (seconds between calls)
-  rate_limit_delay: 0.5
+  rate_limit_delay: 2.0
   # Retry on failure
-  max_retries: 3
+  max_retries: 6
+  # Initial backoff for rate-limited calls
+  retry_initial_delay: 5.0
+  # Maximum backoff between retries
+  retry_max_delay: 60.0
+  # Cache successful LLM responses by prompt hash to reduce repeated calls
+  cache_path: "outputs/llm_cache.json"
 
   # Fallback thresholds (used when provider = "none")
   fallback:
