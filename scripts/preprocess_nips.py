@@ -1,48 +1,36 @@
 """
-Preprocess NIPS corpus from Kaggle archive.zip.
-
+Advanced Preprocessing Pipeline for LLM-Augmented CoNTM
+Dataset: NIPS corpus
 Steps:
-1. Read papers.csv (source_id, year, title, abstract, full_text)
-2. Split each paper's full_text into paragraphs (each paragraph = 1 document)
-3. Group years into 3-year bins → 11 timestamps
-4. Lowercase, tokenize with spaCy, remove stopwords & punctuation
-5. Build BoW with sklearn CountVectorizer (min_df=0.05%, max_df=95%)
-6. Save: train_bow.npz, vocab.txt, train_times.txt, train_texts.txt, etc.
-
-Target statistics (from paper):
-  - ~276,657 documents
-  - ~6,278 vocab
-  - 11 timestamps
+1. Parse CSV, split into paragraphs, filter by min_words.
+2. Tokenize using fast spaCy multiprocessing.
+3. Chronological Train/Test Split (Strictly 90/10 sequential per time-bin).
+4. Build BoW matrices & global vocabulary.
+5. Extract LLM Embeddings for Documents and Vocabulary using Sentence-Transformers.
+6. Export artifacts (NPZ, NPY, JSON).
 """
 
 import csv
 import sys
 import os
 import re
-import json
 import argparse
 import numpy as np
-from pathlib import Path
-from collections import Counter
+from collections import Counter, defaultdict
 from tqdm import tqdm
+from scipy import sparse
+import json
+import torch
 
+# Increase CSV field size limit for large texts
 csv.field_size_limit(sys.maxsize)
 
-# ── Year → timestamp bin mapping ─────────────────────────────────────────────
+# ── Year → Timestamp Mapping ─────────────────────────────────────────────
 YEAR_BINS = [
-    (1987, 1989),  # T0
-    (1990, 1992),  # T1
-    (1993, 1995),  # T2
-    (1996, 1998),  # T3
-    (1999, 2001),  # T4
-    (2002, 2004),  # T5
-    (2005, 2007),  # T6
-    (2008, 2010),  # T7
-    (2011, 2013),  # T8
-    (2014, 2016),  # T9
-    (2017, 2019),  # T10
+    (1987, 1989), (1990, 1992), (1993, 1995), (1996, 1998), (1999, 2001),
+    (2002, 2004), (2005, 2007), (2008, 2010), (2011, 2013), (2014, 2016),
+    (2017, 2019),
 ]
-
 
 def year_to_timestamp(year: int) -> int:
     for i, (lo, hi) in enumerate(YEAR_BINS):
@@ -50,235 +38,226 @@ def year_to_timestamp(year: int) -> int:
             return i
     return -1
 
+def split_into_paragraphs(text: str, min_words: int = 15) -> list:
+    # 1. Fix hyphenated line breaks: "al-\ngorithm" → "algorithm"
+    text = re.sub(r"-\s*\n\s*", "", text)
 
-def split_into_paragraphs(text: str, min_words: int = 15) -> list[str]:
-    """Split full_text into paragraphs, keeping only those with >= min_words."""
-    # Split on double newlines (common paragraph boundary)
+    # 2. Fix non-hyphenated mid-word line breaks from PDF parsing:
+    #    "distribu\ntion" → "distribution"
+    #    Pattern: lowercase letter at end of line, lowercase at start of next.
+    text = re.sub(r"([a-z])[ \t]*\n[ \t]*([a-z])", r"\1\2", text)
+
+    # 3. Fix space-separated word fragments from PDF layout parsing:
+    #    "alterna tives" → "alternatives", "distribu tions" → "distributions"
+    #    Detects: word-stem + spurious space + known English suffix/ending.
+    _BROKEN_SUFFIX = re.compile(
+        r"([a-z]{2,}) "
+        r"(tion[s]?|tive[s]?|ment[s]?|ness(?:[a-z]*)?|ful|less|"
+        r"ous|ious|eous|able[s]?|ible[s]?|ance[s]?|ence[s]?|"
+        r"ity|ities|ism[s]?|ist[s]?|ize[ds]?|izing|ify(?:ing|ied)?|"
+        r"ate[ds]?|ating|ing[s]?|edly|ingly|ably|ibly|"
+        r"tic[s]?|ical(?:ly)?|ive[s]?|ory|ories|ure[s]?|"
+        r"ers|ors|ward[s]?|wise)\b"
+    )
+    # Apply twice to handle rare double-space breaks ("distribu ti ons")
+    text = _BROKEN_SUFFIX.sub(r"\1\2", text)
+    text = _BROKEN_SUFFIX.sub(r"\1\2", text)
+
+    # 4. Split on blank lines into paragraphs
     raw_paras = re.split(r"\n\s*\n", text)
     paras = []
     for p in raw_paras:
         p = p.strip()
-        p = re.sub(r"\s+", " ", p)  # collapse whitespace
+        p = re.sub(r"\s+", " ", p)
         if len(p.split()) >= min_words:
             paras.append(p)
     return paras
 
-
-def tokenize_spacy(texts: list[str], batch_size: int = 10000) -> list[list[str]]:
-    """Tokenize with spaCy: lowercase, remove stopwords, punctuation, numbers.
-
-    Uses spacy.blank("en") instead of en_core_web_sm — we only need the
-    tokenizer, not POS/NER/parser which are 10-50x slower.
-    Runs with multiprocessing for speed on large corpora.
-    """
+def tokenize_spacy(texts: list, batch_size: int = 1000) -> list:
     import spacy
-    from spacy.lang.en.stop_words import STOP_WORDS
-
-    # blank("en") gives us the English tokenizer without any statistical models
-    nlp = spacy.blank("en")
+    # KHÔNG dùng blank nữa, phải dùng core_web_sm để có POS Tagger
+    # Chạy lệnh này ở terminal trước: python -m spacy download en_core_web_sm
+    nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
     nlp.max_length = 2_000_000
 
-    stopwords = STOP_WORDS
-    n_cpus = min(os.cpu_count() or 1, 16)
-    print(f"  Using spaCy blank tokenizer with {n_cpus} processes, batch_size={batch_size}")
+    # Chỉ định các từ loại được phép giữ lại (Loại bỏ PROPN - Tên riêng)
+    ALLOWED_POS = {"NOUN", "VERB", "ADJ", "ADV"}
 
+    # Common PDF-parsing artifact fragments that slip through as valid alpha tokens.
+    # These are bare suffixes/prefixes that are never meaningful as standalone words.
+    FRAGMENT_BLOCKLIST = {
+        "tion", "tions", "tion", "tive", "tives", "ment", "ments",
+        "ness", "ful", "less", "ous", "ious", "eous", "able", "ible",
+        "ance", "ence", "ances", "ences", "ity", "ities", "ism", "isms",
+        "ist", "ists", "ize", "izes", "ized", "izer", "izing",
+        "ify", "ified", "ifier", "ifying", "ify",
+        "ate", "ated", "ates", "ating", "ation",
+        "ing", "ings", "edly", "ingly", "ably", "ibly",
+        "tic", "tics", "stic", "ical", "ically",
+        "ive", "ives", "ory", "ories", "ory",
+        "ers", "ors", "ure", "ures", "ive",
+    }
+
+    n_cpus = min(os.cpu_count() or 1, 16)
+    print(f"  Using spaCy POS Tagger with {n_cpus} processes...")
+
+    # Hide CUDA from forked spaCy worker processes — they are CPU-only and
+    # each worker would otherwise attempt (and fail) to init the CUDA driver,
+    # producing a noisy but harmless warning. We restore the variable after.
+    _saved_cuda = os.environ.get("CUDA_VISIBLE_DEVICES")
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    
     all_tokens = []
-    for doc in tqdm(
-        nlp.pipe(texts, batch_size=batch_size, n_process=n_cpus),
-        total=len(texts),
-        desc="Tokenizing (spaCy)",
-    ):
+    for doc in tqdm(nlp.pipe(texts, batch_size=batch_size, n_process=n_cpus), total=len(texts), desc="Tokenizing"):
         tokens = []
         for tok in doc:
-            t = tok.text.lower().strip()
-            if t in stopwords or tok.is_punct or tok.is_space:
-                continue
-            # Keep only alphabetic tokens of length >= 3
-            if len(t) >= 3 and t.isalpha():
-                tokens.append(t)
+            t = tok.lemma_.lower().strip() # Dùng lemma (từ gốc) thay vì text thô
+            
+            # Lọc: Không phải stopword, không phải dấu câu, đúng từ loại cho phép
+            if (not tok.is_stop and not tok.is_punct and not tok.is_space):
+                # Loại bỏ các từ vỡ, từ chỉ có 1-2 chữ cái, hoặc chứa số/kí tự lạ
+                # Cũng loại bỏ các suffix fragment như 'tion', 'tive', 'ment'...
+                if len(t) >= 3 and t.isalpha() and t not in FRAGMENT_BLOCKLIST:
+                    tokens.append(t)
         all_tokens.append(tokens)
+
+    # Restore CUDA visibility for the main process after workers are done
+    if _saved_cuda is None:
+        os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+    else:
+        os.environ["CUDA_VISIBLE_DEVICES"] = _saved_cuda
+
     return all_tokens
-
-
 def main():
-    parser = argparse.ArgumentParser(description="Preprocess NIPS corpus")
-    parser.add_argument(
-        "--input",
-        default="data/NIPS_raw/papers.csv",
-        help="Path to papers.csv",
-    )
-    parser.add_argument(
-        "--output-dir",
-        default="data/NIPS",
-        help="Output directory for processed files",
-    )
-    parser.add_argument(
-        "--min-para-words",
-        type=int,
-        default=15,
-        help="Minimum words per paragraph to keep",
-    )
-    parser.add_argument(
-        "--min-df",
-        type=float,
-        default=0.0005,
-        help="min_df for CountVectorizer (as fraction)",
-    )
-    parser.add_argument(
-        "--max-df",
-        type=float,
-        default=0.95,
-        help="max_df for CountVectorizer (as fraction)",
-    )
+    parser = argparse.ArgumentParser(description="Preprocess NIPS for LLM-CoNTM")
+    parser.add_argument("--input", default="data/NIPS_raw/papers.csv")
+    parser.add_argument("--output-dir", default="data/NIPS_processed")
+    parser.add_argument("--min-para-words", type=int, default=15)
+    parser.add_argument("--min-df", type=float, default=0.0005)
+    parser.add_argument("--max-df", type=float, default=0.95)
+    parser.add_argument("--llm-model", type=str, default="all-MiniLM-L6-v2", help="Sentence transformer model")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # ── Step 1: Read papers and split into paragraphs ────────────────────────
-    print("Step 1: Reading papers and splitting into paragraphs...")
-    documents = []  # list of (text, timestamp)
-    skipped_year = 0
-
+    # ── Step 1: Read & Chunk ──────────────────────────────────────────────
+    print("\nStep 1: Reading and Splitting Paragraphs...")
+    raw_documents = [] # list of dicts
+    
     with open(args.input, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        for row in tqdm(reader, desc="Reading papers"):
+        for row in tqdm(reader, desc="Parsing CSV"):
             year = int(row["year"])
             ts = year_to_timestamp(year)
-            if ts < 0:
-                skipped_year += 1
-                continue
-
+            if ts < 0: continue
+            
             full_text = row.get("full_text", "")
-            if not full_text:
-                continue
-
+            if not full_text: continue
+            
             paras = split_into_paragraphs(full_text, min_words=args.min_para_words)
             for p in paras:
-                documents.append((p, ts))
+                raw_documents.append({"year": year, "ts": ts, "raw_text": p})
 
-    print(f"  Total paragraphs (docs): {len(documents)}")
-    print(f"  Skipped papers (out-of-range year): {skipped_year}")
+    # Sort documents strictly by year to ensure chronological order
+    raw_documents.sort(key=lambda x: x["year"])
+    
+    # ── Step 2: Tokenize ──────────────────────────────────────────────────
+    print("\nStep 2: Tokenizing...")
+    texts_to_tokenize = [d["raw_text"] for d in raw_documents]
+    tokenized_docs = tokenize_spacy(texts_to_tokenize)
+    
+    # Filter empty after tokenization
+    valid_docs = []
+    for i, tokens in enumerate(tokenized_docs):
+        if len(tokens) > 0:
+            doc_info = raw_documents[i].copy()
+            doc_info["processed_text"] = " ".join(tokens)
+            valid_docs.append(doc_info)
+            
+    print(f"  Valid documents after tokenization: {len(valid_docs)}")
 
-    ts_counts = Counter(ts for _, ts in documents)
-    for t in sorted(ts_counts):
-        lo, hi = YEAR_BINS[t]
-        print(f"  T{t} ({lo}-{hi}): {ts_counts[t]} docs")
+    # ── Step 3: Chronological Train/Test Split ────────────────────────────
+    print("\nStep 3: Temporal Train/Test Split (Sequential 90/10)...")
+    docs_by_ts = defaultdict(list)
+    for doc in valid_docs:
+        docs_by_ts[doc["ts"]].append(doc)
+        
+    train_docs, test_docs = [], []
+    for ts in sorted(docs_by_ts.keys()):
+        ts_docs = docs_by_ts[ts]
+        split_idx = int(len(ts_docs) * 0.9) # Strict cutoff (Past = Train, Future = Test)
+        
+        for d in ts_docs[:split_idx]:
+            d["split"] = "train"
+            train_docs.append(d)
+        for d in ts_docs[split_idx:]:
+            d["split"] = "test"
+            test_docs.append(d)
 
-    # ── Step 2: Tokenize with spaCy ──────────────────────────────────────────
-    print("\nStep 2: Tokenizing with spaCy...")
-    raw_texts = [d[0] for d in documents]
-    tokenized = tokenize_spacy(raw_texts)
+    print(f"  Train set: {len(train_docs)} docs")
+    print(f"  Test set: {len(test_docs)} docs")
+    
+    all_final_docs = train_docs + test_docs # Ordered naturally by ts
 
-    # Rejoin tokens for CountVectorizer (it expects strings)
-    processed_texts = [" ".join(toks) for toks in tokenized]
-
-    # Filter out empty documents after tokenization
-    valid_indices = [i for i, t in enumerate(processed_texts) if len(t.strip()) > 0]
-    processed_texts = [processed_texts[i] for i in valid_indices]
-    timestamps = [documents[i][1] for i in valid_indices]
-    original_texts = [documents[i][0] for i in valid_indices]
-    print(f"  Documents after tokenization filter: {len(processed_texts)}")
-
-    # ── Step 3: Build BoW with sklearn ───────────────────────────────────────
-    print(f"\nStep 3: Building BoW (min_df={args.min_df}, max_df={args.max_df})...")
+    # ── Step 4: Build Global BoW & Vocabulary ─────────────────────────────
+    print(f"\nStep 4: Building BoW (min_df={args.min_df}, max_df={args.max_df})...")
     from sklearn.feature_extraction.text import CountVectorizer
 
-    vectorizer = CountVectorizer(
-        min_df=args.min_df,
-        max_df=args.max_df,
-        token_pattern=r"(?u)\b[a-zA-Z]{3,}\b",
-    )
-    bow_matrix = vectorizer.fit_transform(processed_texts)
+    # We fit ONLY on train set to prevent vocab leakage from the test set
+    vectorizer = CountVectorizer(min_df=args.min_df, max_df=args.max_df, token_pattern=r"(?u)\b[a-zA-Z]{3,}\b")
+    train_texts = [d["processed_text"] for d in train_docs]
+    
+    vectorizer.fit(train_texts)
     vocab = vectorizer.get_feature_names_out()
+    print(f"  Global Vocabulary size: {len(vocab)}")
 
-    print(f"  BoW shape: {bow_matrix.shape}")
-    print(f"  Vocab size: {len(vocab)}")
+    # Transform both
+    train_bow = vectorizer.transform(train_texts)
+    test_bow = vectorizer.transform([d["processed_text"] for d in test_docs])
 
-    # Filter out documents with zero words in the final vocab
-    row_sums = np.array(bow_matrix.sum(axis=1)).flatten()
-    nonzero_idx = np.where(row_sums > 0)[0]
-    bow_matrix = bow_matrix[nonzero_idx]
-    timestamps = [timestamps[i] for i in nonzero_idx]
-    original_texts = [original_texts[i] for i in nonzero_idx]
+    # ── Step 5: Extract LLM Embeddings ────────────────────────────────────
+    print(f"\nStep 5: Extracting LLM Embeddings using '{args.llm_model}'...")
+    from sentence_transformers import SentenceTransformer
+    
+    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    print(f"  Device detected: {device}")
+    model = SentenceTransformer(args.llm_model, device=device)
+    
+    # 5a. Document Embeddings (Using RAW text for better LLM context, not tokenized text)
+    all_raw_texts = [d["raw_text"] for d in all_final_docs]
+    print("  Encoding Documents...")
+    doc_embeddings = model.encode(all_raw_texts, batch_size=256, show_progress_bar=True, convert_to_numpy=True)
+    
+    # 5b. Vocabulary Embeddings
+    print("  Encoding Vocabulary...")
+    vocab_embeddings = model.encode(vocab.tolist(), batch_size=512, show_progress_bar=True, convert_to_numpy=True)
 
-    print(f"  Documents after vocab filter: {bow_matrix.shape[0]}")
-
-    ts_counts_final = Counter(timestamps)
-    print(f"  Timestamps: {len(ts_counts_final)}")
-    for t in sorted(ts_counts_final):
-        lo, hi = YEAR_BINS[t]
-        print(f"    T{t} ({lo}-{hi}): {ts_counts_final[t]} docs")
-
-    # ── Step 4: Train/Test split (90/10 stratified by timestamp) ─────────────
-    print("\nStep 4: Train/test split (90/10)...")
-    from sklearn.model_selection import train_test_split
-
-    indices = np.arange(bow_matrix.shape[0])
-    train_idx, test_idx = train_test_split(
-        indices, test_size=0.1, random_state=42, stratify=timestamps
-    )
-
-    train_bow = bow_matrix[train_idx]
-    test_bow = bow_matrix[test_idx]
-    train_times = [timestamps[i] for i in train_idx]
-    test_times = [timestamps[i] for i in test_idx]
-    train_texts = [original_texts[i] for i in train_idx]
-    test_texts = [original_texts[i] for i in test_idx]
-
-    print(f"  Train: {train_bow.shape[0]} docs")
-    print(f"  Test:  {test_bow.shape[0]} docs")
-
-    # ── Step 5: Save ─────────────────────────────────────────────────────────
-    print(f"\nStep 5: Saving to {args.output_dir}/...")
-    from scipy import sparse
-
+    # ── Step 6: Save Everything ───────────────────────────────────────────
+    print(f"\nStep 6: Saving artifacts to {args.output_dir}/...")
+    
+    # Save Sparse Matrices
     sparse.save_npz(os.path.join(args.output_dir, "train_bow.npz"), train_bow)
     sparse.save_npz(os.path.join(args.output_dir, "test_bow.npz"), test_bow)
+    
+    # Save Embeddings
+    np.save(os.path.join(args.output_dir, "doc_embeddings.npy"), doc_embeddings)
+    np.save(os.path.join(args.output_dir, "vocab_embeddings.npy"), vocab_embeddings)
+    
+    # Save Vocab
+    with open(os.path.join(args.output_dir, "vocab.txt"), "w", encoding="utf-8") as f:
+        f.write("\n".join(vocab))
+        
+    # Save Document Metadata (so the PyTorch Dataloader knows timestamps and splits)
+    metadata = [
+        {"ts": d["ts"], "year": d["year"], "split": d["split"]} 
+        for d in all_final_docs
+    ]
+    with open(os.path.join(args.output_dir, "doc_metadata.json"), "w", encoding="utf-8") as f:
+        json.dump(metadata, f)
 
-    with open(os.path.join(args.output_dir, "vocab.txt"), "w") as f:
-        for w in vocab:
-            f.write(w + "\n")
-
-    with open(os.path.join(args.output_dir, "train_times.txt"), "w") as f:
-        for t in train_times:
-            f.write(str(t) + "\n")
-
-    with open(os.path.join(args.output_dir, "test_times.txt"), "w") as f:
-        for t in test_times:
-            f.write(str(t) + "\n")
-
-    with open(os.path.join(args.output_dir, "train_texts.txt"), "w") as f:
-        for t in train_texts:
-            f.write(t.replace("\n", " ") + "\n")
-
-    with open(os.path.join(args.output_dir, "test_texts.txt"), "w") as f:
-        for t in test_texts:
-            f.write(t.replace("\n", " ") + "\n")
-
-    # Save time2id mapping
-    with open(os.path.join(args.output_dir, "time2id.txt"), "w") as f:
-        for i, (lo, hi) in enumerate(YEAR_BINS):
-            f.write(f"{i}\t{lo}-{hi}\n")
-
-    # Save train/test indices
-    np.savetxt(
-        os.path.join(args.output_dir, "train_idx.txt"), train_idx, fmt="%d"
-    )
-    np.savetxt(
-        os.path.join(args.output_dir, "test_idx.txt"), test_idx, fmt="%d"
-    )
-
-    # ── Summary ──────────────────────────────────────────────────────────────
     print("\n" + "=" * 60)
-    print("PREPROCESSING COMPLETE")
+    print("PREPROCESSING COMPLETE - READY FOR LLM-CoNTM")
     print("=" * 60)
-    print(f"  Total documents:  {bow_matrix.shape[0]}")
-    print(f"  Vocab size:       {len(vocab)}")
-    print(f"  Timestamps:       {len(ts_counts_final)}")
-    print(f"  Train docs:       {train_bow.shape[0]}")
-    print(f"  Test docs:        {test_bow.shape[0]}")
-    print(f"  BoW density:      {bow_matrix.nnz / (bow_matrix.shape[0] * bow_matrix.shape[1]):.6f}")
-
 
 if __name__ == "__main__":
     main()

@@ -3,6 +3,11 @@ data/
 data/**
 outputs/
 outputs/**
+outputs_llm_contm/
+outputs_llm_contm/**
+
+# Logs
+nohup*.out
 
 # Archive
 archive.zip

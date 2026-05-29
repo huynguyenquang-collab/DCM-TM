@@ -31,6 +31,58 @@ from src.topic_utils import (
 )
 
 
+# ── Sparse routing helpers ────────────────────────────────────────────────────
+
+def _entmax15(x: np.ndarray, axis: int = -1) -> np.ndarray:
+    """1.5-entmax (Tsallis α=1.5) — produces truly sparse distributions.
+
+    Applies independently along *axis*.  Pure-numpy, fully differentiable
+    in the forward pass (the backward pass is not needed here because we
+    operate on numpy gate outputs, not torch autograd tensors).
+
+    Reference: Peters et al., "Sparse Sequence-to-Sequence Models", 2019.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    # Move target axis to the end
+    x = np.moveaxis(x, axis, -1)
+    shape = x.shape
+    x_flat = x.reshape(-1, shape[-1])
+
+    out = np.zeros_like(x_flat)
+    for i in range(x_flat.shape[0]):
+        out[i] = _entmax15_1d(x_flat[i])
+    out = out.reshape(shape)
+    return np.moveaxis(out, -1, axis)
+
+
+def _entmax15_1d(z: np.ndarray) -> np.ndarray:
+    """1.5-entmax for a single 1-D vector."""
+    z = z - z.max()
+    sorted_z = np.sort(z)[::-1]
+    n = len(z)
+    cumsum = np.cumsum(sorted_z)
+    rho = np.arange(1, n + 1, dtype=np.float64)
+    mean_val = (cumsum - 1.0) / rho
+    # Threshold: last index where sorted_z > mean
+    support = sorted_z > mean_val
+    k = int(support.sum())
+    if k == 0:
+        k = 1
+    tau = (cumsum[k - 1] - 1.0) / k
+    p = np.maximum(z - tau, 0.0)
+    # Normalize (entmax 1.5 uses square root normalisation)
+    p = p ** 2
+    total = p.sum()
+    if total > 0:
+        p = p / total
+    return p
+
+
+def _row_entmax15(x: np.ndarray) -> np.ndarray:
+    """Apply 1.5-entmax row-wise to a 2-D matrix."""
+    return _entmax15(x, axis=1)
+
+
 @dataclass
 class GlobalUpdate:
     """Record of what changed in one timestamp update."""
@@ -236,15 +288,41 @@ class GlobalMemory:
         tau_replace: float = 0.1,
         novelty_lambda: float = 0.3,
         eps: float = 1e-8,
+        # ── Fix 1: Sparse routing ──
+        routing: str = "entmax",          # "softmax" | "entmax"
+        sim_mask_threshold: float = 0.0,  # mask sims below this before routing
+        tau_anneal_rate: float = 0.0,     # per-step tau decay (0 = no anneal)
+        # ── Fix 2: Multi-prototype novelty ──
+        multi_novelty: bool = True,
+        novelty_threshold: float = 0.5,   # gate threshold for "high novelty"
+        max_novelty_clusters: int = 5,
+        # ── Fix 3: Diversity regularisation ──
+        diversity_weight: float = 0.01,
+        # ── Fix 4: EMA anchors ──
+        anchor_gamma: float = 0.95,
+        anchor_weight: float = 0.005,
     ) -> dict:
-        """Fixed-K soft update with survival and novelty gates."""
+        """Fixed-K soft update with survival and novelty gates.
+
+        Incorporates four structural fixes:
+          1. Sparse routing (entmax / masked softmax) for slot assignments
+          2. Multi-prototype novelty routing (cluster novel locals → distinct slots)
+          3. Diversity repulsion regularisation between global embeddings
+          4. EMA semantic anchors to prevent long-term drift
+        """
         if self.beta_logits is None or self.K == 0:
             self.initialize_from_local(local_topics, local_beta, timestamp, vocab=vocab)
+            # Bootstrap EMA anchors from initial embeddings
+            alpha0 = _topic_embedding_matrix(self.topics)
+            if alpha0 is not None:
+                self._ema_anchors = alpha0.copy()
             return {
                 "mean_survival": 0.0,
                 "mean_novelty": 1.0,
                 "effective_novel_mass": float(len(local_topics)),
                 "max_replacement_weight": 0.0,
+                "diversity_reg": 0.0,
+                "anchor_reg": 0.0,
             }
 
         K = self.K
@@ -255,6 +333,8 @@ class GlobalMemory:
                 "mean_novelty": 0.0,
                 "effective_novel_mass": 0.0,
                 "max_replacement_weight": 0.0,
+                "diversity_reg": 0.0,
+                "anchor_reg": 0.0,
             }
 
         retain = np.clip(np.asarray(retain_gates, dtype=np.float64), eps, 1.0)
@@ -269,53 +349,216 @@ class GlobalMemory:
         if local_beta.shape[0] != J:
             raise ValueError("local_beta rows must match local_topics")
 
-        sim_matrix = cosine_similarity_matrix(local_topics, self.topics)
-        assign_base = _row_softmax(sim_matrix / max(tau_assign, eps))
-        assignments = (1.0 - novelty)[:, None] * assign_base
+        # ────────────────────────────────────────────────────────────────
+        # Fix 1: Sparse routing — replace dense softmax with entmax
+        # ────────────────────────────────────────────────────────────────
+        sim_matrix = cosine_similarity_matrix(local_topics, self.topics)  # (J, K)
 
-        assigned_mass = assignments.sum(axis=0)
+        # Optional temperature annealing
+        effective_tau = tau_assign
+        if tau_anneal_rate > 0 and timestamp > 0:
+            effective_tau = tau_assign * (1.0 + tau_anneal_rate * timestamp)
+
+        scaled_sims = sim_matrix / max(effective_tau, eps)
+
+        # Optional similarity masking: zero out weak connections
+        if sim_mask_threshold > 0:
+            mask = sim_matrix >= sim_mask_threshold
+            scaled_sims = np.where(mask, scaled_sims, -1e9)
+
+        if routing == "entmax":
+            assign_base = _row_entmax15(scaled_sims)
+        else:
+            assign_base = _row_softmax(scaled_sims)
+
+        assignments = (1.0 - novelty)[:, None] * assign_base  # (J, K)
+
+        assigned_mass = assignments.sum(axis=0)  # (K,)
         denom = retain + assigned_mass + eps
         assimilated_beta = (
             retain[:, None] * old_beta
             + assignments.T @ local_beta
         ) / denom[:, None]
 
+        # ────────────────────────────────────────────────────────────────
+        # Fix 2: Multi-prototype novelty routing
+        # ────────────────────────────────────────────────────────────────
         novel_mass = float(novelty.sum())
-        if novel_mass > eps:
-            novelty_beta = (novelty[:, None] * local_beta).sum(axis=0) / novel_mass
-            replace_weights = _softmax((1.0 - retain) / max(tau_replace, eps))
-            slot_mix = novelty_lambda * replace_weights
-        else:
-            novelty_beta = np.zeros(old_beta.shape[1], dtype=np.float64)
-            replace_weights = np.zeros(K, dtype=np.float64)
-            slot_mix = np.zeros(K, dtype=np.float64)
 
-        old_alpha = _topic_embedding_matrix(self.topics)
-        local_alpha = _topic_embedding_matrix(local_topics)
+        old_alpha = _topic_embedding_matrix(self.topics)   # (K, D) or None
+        local_alpha = _topic_embedding_matrix(local_topics)  # (J, D) or None
+
+        if novel_mass > eps and multi_novelty and local_alpha is not None:
+            # Identify high-novelty local topics
+            high_novel_mask = novelty >= novelty_threshold
+            high_novel_idx = np.where(high_novel_mask)[0]
+
+            if len(high_novel_idx) >= 2:
+                # Cluster high-novelty topics into distinct groups
+                novel_embs = local_alpha[high_novel_idx]   # (n_novel, D)
+                novel_weights = novelty[high_novel_idx]
+                n_clusters = min(max_novelty_clusters, len(high_novel_idx))
+                cluster_labels = _simple_kmeans(novel_embs, n_clusters)
+
+                # Build per-cluster prototypes (beta and alpha)
+                prototypes_beta = []
+                prototypes_alpha = []
+                for c in range(n_clusters):
+                    c_mask = cluster_labels == c
+                    if not c_mask.any():
+                        continue
+                    c_idx = high_novel_idx[c_mask]
+                    c_weights = novelty[c_idx]
+                    c_total = c_weights.sum() + eps
+                    proto_beta = (c_weights[:, None] * local_beta[c_idx]).sum(axis=0) / c_total
+                    proto_alpha = (c_weights[:, None] * local_alpha[c_idx]).sum(axis=0) / c_total
+                    proto_alpha = proto_alpha / (np.linalg.norm(proto_alpha) + eps)
+                    prototypes_beta.append(proto_beta)
+                    prototypes_alpha.append(proto_alpha)
+
+                # Route prototypes to distinct weak slots via sparse bipartite matching
+                if prototypes_alpha and old_alpha is not None:
+                    weakness = 1.0 - retain  # higher = weaker slot
+                    proto_alpha_mat = np.stack(prototypes_alpha)  # (C, D)
+                    proto_beta_mat = np.stack(prototypes_beta)    # (C, V)
+
+                    # Affinity: weakness * (1 - similarity to existing slot)
+                    # so novel concepts go to weak AND dissimilar slots
+                    slot_sim = proto_alpha_mat @ old_alpha.T  # (C, K)
+                    affinity = weakness[None, :] * (1.0 - slot_sim)  # (C, K)
+                    
+                    # Greedy assignment: each prototype claims its best slot
+                    slot_mix = np.zeros(K, dtype=np.float64)
+                    slot_novelty_beta = np.zeros_like(old_beta)
+                    slot_novelty_alpha = np.zeros_like(old_alpha)
+                    claimed = set()
+                    sorted_protos = np.argsort([-w.sum() for w in [novelty[high_novel_idx[cluster_labels == c]] for c in range(len(prototypes_alpha))]])
+                    for pi in sorted_protos:
+                        # Pick best unclaimed slot
+                        scores = affinity[pi].copy()
+                        for s in claimed:
+                            scores[s] = -1e9
+                        best_slot = int(np.argmax(scores))
+                        claimed.add(best_slot)
+                        replace_w = novelty_lambda * weakness[best_slot]
+                        slot_mix[best_slot] = replace_w
+                        slot_novelty_beta[best_slot] = proto_beta_mat[pi]
+                        slot_novelty_alpha[best_slot] = proto_alpha_mat[pi]
+
+                    # Also handle low-novelty locals with original single-prototype
+                    low_novel_mask = (~high_novel_mask) & (novelty > eps)
+                    low_novel_idx = np.where(low_novel_mask)[0]
+                    if len(low_novel_idx) > 0:
+                        low_mass = novelty[low_novel_idx].sum()
+                        low_beta = (novelty[low_novel_idx, None] * local_beta[low_novel_idx]).sum(axis=0) / low_mass
+                        low_alpha_vec = (novelty[low_novel_idx, None] * local_alpha[low_novel_idx]).sum(axis=0) / low_mass
+                        low_alpha_vec = low_alpha_vec / (np.linalg.norm(low_alpha_vec) + eps)
+                        # Route to weakest unclaimed slot
+                        residual_weakness = weakness.copy()
+                        for s in claimed:
+                            residual_weakness[s] = -1e9
+                        if residual_weakness.max() > 0:
+                            best_low = int(np.argmax(residual_weakness))
+                            low_w = novelty_lambda * weakness[best_low] * 0.5
+                            slot_mix[best_low] = max(slot_mix[best_low], low_w)
+                            slot_novelty_beta[best_low] = low_beta
+                            slot_novelty_alpha[best_low] = low_alpha_vec
+
+                    # Assemble new embeddings
+                    has_novelty_routing = True
+                    replace_weights = slot_mix / (novelty_lambda + eps)
+                else:
+                    has_novelty_routing = False
+            else:
+                has_novelty_routing = False
+        else:
+            has_novelty_routing = False
+
+        # Fallback: original single-prototype novelty (when multi disabled or < 2 novel)
+        if not has_novelty_routing:
+            if novel_mass > eps:
+                novelty_beta = (novelty[:, None] * local_beta).sum(axis=0) / novel_mass
+                replace_weights = _softmax((1.0 - retain) / max(tau_replace, eps))
+                slot_mix = novelty_lambda * replace_weights
+                if local_alpha is not None:
+                    novelty_alpha_vec = (novelty[:, None] * local_alpha).sum(axis=0) / novel_mass
+                else:
+                    novelty_alpha_vec = None
+            else:
+                novelty_beta = np.zeros(old_beta.shape[1], dtype=np.float64)
+                replace_weights = np.zeros(K, dtype=np.float64)
+                slot_mix = np.zeros(K, dtype=np.float64)
+                novelty_alpha_vec = None
+
+            # Build per-slot novelty arrays for uniform interface
+            slot_novelty_beta = np.tile(novelty_beta, (K, 1))
+            if old_alpha is not None and novelty_alpha_vec is not None:
+                slot_novelty_alpha = np.tile(novelty_alpha_vec, (K, 1))
+            else:
+                slot_novelty_alpha = None
+
+        # ── Assemble final beta and alpha ─────────────────────────────────
         if old_alpha is not None and local_alpha is not None:
             assimilated_alpha = (
                 retain[:, None] * old_alpha
                 + assignments.T @ local_alpha
             ) / denom[:, None]
-            if novel_mass > eps:
-                novelty_alpha = (
-                    novelty[:, None] * local_alpha
-                ).sum(axis=0) / novel_mass
-            else:
-                novelty_alpha = np.zeros(old_alpha.shape[1], dtype=np.float64)
+
             new_alpha = (
                 (1.0 - slot_mix[:, None]) * assimilated_alpha
-                + slot_mix[:, None] * novelty_alpha[None, :]
+                + slot_mix[:, None] * slot_novelty_alpha
             )
+
+            # ────────────────────────────────────────────────────────────
+            # Fix 3: Diversity repulsion regularisation
+            # ────────────────────────────────────────────────────────────
+            diversity_reg = 0.0
+            if diversity_weight > 0 and K > 1:
+                normed = new_alpha / (np.linalg.norm(new_alpha, axis=1, keepdims=True) + eps)
+                cos_sim = normed @ normed.T  # (K, K)
+                # Zero out diagonal
+                np.fill_diagonal(cos_sim, 0.0)
+                diversity_reg = float((cos_sim ** 2).sum() / (K * (K - 1)))
+                # Apply repulsion: push embeddings apart
+                # Gradient of cos²(a_k, a_k') w.r.t. a_k ∝ cos_sim * a_k'
+                repulsion_grad = (cos_sim @ normed) * 2.0 / (K * (K - 1))
+                new_alpha = new_alpha - diversity_weight * repulsion_grad
+
+            # ────────────────────────────────────────────────────────────
+            # Fix 4: EMA semantic anchors
+            # ────────────────────────────────────────────────────────────
+            anchor_reg = 0.0
+            if not hasattr(self, '_ema_anchors') or self._ema_anchors is None:
+                self._ema_anchors = old_alpha.copy()
+
+            if anchor_weight > 0 and self._ema_anchors is not None:
+                anchors = self._ema_anchors
+                # Compute drift penalty: weighted cosine distance
+                normed_new = new_alpha / (np.linalg.norm(new_alpha, axis=1, keepdims=True) + eps)
+                normed_anch = anchors / (np.linalg.norm(anchors, axis=1, keepdims=True) + eps)
+                cos_to_anchor = (normed_new * normed_anch).sum(axis=1)  # (K,)
+                drift = 1.0 - cos_to_anchor  # cosine distance
+                anchor_reg = float(np.mean(retain * drift))
+                # Pull embeddings toward anchors proportional to retain gate
+                drift_grad = normed_new - normed_anch
+                new_alpha = new_alpha - anchor_weight * retain[:, None] * drift_grad
+
+            # Re-normalise
             new_alpha = new_alpha / (
                 np.linalg.norm(new_alpha, axis=1, keepdims=True) + eps
             )
+
+            # Update EMA anchors: hat{α}_k ← γ * hat{α}_k + (1-γ) * α_k
+            self._ema_anchors = anchor_gamma * self._ema_anchors + (1.0 - anchor_gamma) * new_alpha
+
             new_beta = _beta_from_alpha(new_alpha, vocab, self.embedding_model)
         else:
+            diversity_reg = 0.0
+            anchor_reg = 0.0
             new_alpha = None
             new_beta = (
                 (1.0 - slot_mix[:, None]) * assimilated_beta
-                + slot_mix[:, None] * novelty_beta[None, :]
+                + slot_mix[:, None] * slot_novelty_beta
             )
             new_beta = new_beta / (new_beta.sum(axis=1, keepdims=True) + eps)
 
@@ -325,7 +568,7 @@ class GlobalMemory:
             topic.metadata = deepcopy(self.topics[idx].metadata)
             topic.metadata["last_soft_update"] = timestamp
             topic.metadata["survival_gate"] = float(retain[idx])
-            topic.metadata["replacement_weight"] = float(replace_weights[idx])
+            topic.metadata["replacement_weight"] = float(replace_weights[idx] if idx < len(replace_weights) else 0.0)
 
         if new_alpha is not None:
             for topic, emb in zip(refreshed, new_alpha):
@@ -354,11 +597,16 @@ class GlobalMemory:
             "mean_novelty": float(novelty.mean()),
             "effective_novel_mass": novel_mass,
             "max_replacement_weight": float(replace_weights.max()) if K else 0.0,
+            "diversity_reg": diversity_reg,
+            "anchor_reg": anchor_reg,
+            "routing": routing,
+            "multi_novelty_used": has_novelty_routing if multi_novelty else False,
         }
         print(
             f"  Soft memory updated at T{timestamp}: K={self.K}, "
             f"mean survival={stats['mean_survival']:.3f}, "
-            f"novel mass={stats['effective_novel_mass']:.3f}"
+            f"novel mass={stats['effective_novel_mass']:.3f}, "
+            f"div_reg={diversity_reg:.4f}, anchor_reg={anchor_reg:.4f}"
         )
         return stats
 
@@ -503,3 +751,47 @@ def _beta_from_alpha(
     word_embeddings = get_word_embedding_matrix(vocab, embedding_model).astype(np.float64)
     logits = alpha @ word_embeddings.T
     return _row_softmax(logits).astype(np.float32)
+
+
+def _simple_kmeans(
+    embeddings: np.ndarray,
+    n_clusters: int,
+    max_iter: int = 20,
+) -> np.ndarray:
+    """Lightweight k-means on L2-normalised embeddings (cosine k-means).
+
+    Returns integer cluster labels of shape (n,).
+    """
+    n = embeddings.shape[0]
+    if n_clusters >= n:
+        return np.arange(n)
+
+    # Initialise centroids with k-means++ style
+    rng = np.random.RandomState(42)
+    centroids_idx = [rng.randint(n)]
+    for _ in range(1, n_clusters):
+        dists = np.min(
+            [np.linalg.norm(embeddings - embeddings[ci], axis=1) for ci in centroids_idx],
+            axis=0,
+        )
+        probs = dists ** 2
+        probs = probs / (probs.sum() + 1e-12)
+        centroids_idx.append(rng.choice(n, p=probs))
+
+    centroids = embeddings[centroids_idx].copy()
+
+    labels = np.zeros(n, dtype=int)
+    for _ in range(max_iter):
+        # Assign
+        sims = embeddings @ centroids.T  # cosine similarity
+        new_labels = sims.argmax(axis=1)
+        if np.array_equal(new_labels, labels):
+            break
+        labels = new_labels
+        # Update centroids
+        for c in range(n_clusters):
+            mask = labels == c
+            if mask.any():
+                centroids[c] = embeddings[mask].mean(axis=0)
+                centroids[c] /= np.linalg.norm(centroids[c]) + 1e-12
+    return labels
