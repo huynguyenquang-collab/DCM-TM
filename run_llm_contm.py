@@ -25,6 +25,7 @@ from src.llm_contm import (
     SemanticMemoryBuffer,
     train_streaming_step,
     compute_adaptive_lr_scale,
+    compute_surprise_index,  # <--- ĐÃ THÊM HÀM NÀY
 )
 from src.topic_utils import (
     topic_diversity, topic_coherence_pmi, extract_topics,
@@ -51,7 +52,6 @@ DEFAULT_CONFIG = {
     "kl_warmup_epochs": 20,
     "embedding_model": "all-MiniLM-L6-v2",
     # Loss weights
-    "lambda_distill": 0.1,
     "lambda_contrastive": 0.1,
     "top_n_contrastive": 20,
     # Streaming / adaptive plasticity
@@ -130,7 +130,7 @@ def train_timestamp(
     kl_warmup = config["kl_warmup_epochs"]
 
     optimizer = torch.optim.Adam(
-        list(model.parameters()) + list(criterion.parameters()),
+        model.parameters(),
         lr=config["lr"],
         weight_decay=config["weight_decay"],
     )
@@ -141,6 +141,9 @@ def train_timestamp(
     best_loss = float("inf")
     best_state = None
     history = []
+    
+    # Dùng để gom toàn bộ embedding của timestamp ở epoch cuối cùng
+    all_timestamp_embs = []
 
     # Vòng lặp sẽ luôn chạy đủ số epochs cấu hình (ví dụ: 50 hoặc 80)
     for epoch in range(1, epochs + 1):
@@ -159,26 +162,24 @@ def train_timestamp(
                 word_embeddings=word_embeddings_tensor,
                 llm_doc_embeddings=llm_batch,
                 memory_buffer=memory_buffer,
-                streaming_step=streaming_step,
-                prev_mean_embedding=prev_mean_embedding,
                 kl_weight=kl_weight,
-                gamma=config["gamma"],
-                tau_0=config["tau_0"],
-                kappa=config["kappa"],
                 replay_ratio=config["replay_ratio"],
                 device=device,
             )
             epoch_losses.append(step_result["total_loss"])
-            prev_mean_embedding = step_result["new_mean_embedding"]
+            
+            # Chỉ gom embedding ở Epoch cuối cùng để đại diện cho toàn bộ Timestamp này
+            if epoch == epochs:
+                all_timestamp_embs.append(llm_batch.detach().cpu().numpy())
 
         avg_loss = np.mean(epoch_losses)
         scheduler.step(avg_loss)
 
-        # Vẫn theo dõi để lấy checkpoint tốt nhất, nhưng không đếm 'wait' để ngắt dòng lệnh nữa
-        if avg_loss < best_loss:
+        # CHỈ theo dõi checkpoint tốt nhất sau khi KL trọng số đã đạt 1.0 (hết warmup)
+        if epoch >= kl_warmup and avg_loss < best_loss:
             best_loss = avg_loss
             best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
-
+            
         # Log định kỳ mỗi 10 epochs hoặc epoch đầu tiên
         if epoch % 10 == 0 or epoch == 1:
             print(f"    Epoch {epoch:3d} | Loss {avg_loss:.4f}"
@@ -197,12 +198,18 @@ def train_timestamp(
         model.load_state_dict(best_state)
     model = model.to(device)
 
+    # Tính toán vector trung bình đại diện cho toàn bộ Timestamp
+    current_timestamp_mean = None
+    if all_timestamp_embs:
+        current_timestamp_mean = np.concatenate(all_timestamp_embs, axis=0).mean(axis=0)
+
     return {
         "final_epoch": epochs,
         "best_loss": best_loss,
         "history": history,
-        "prev_mean_embedding": prev_mean_embedding,
+        "timestamp_mean_embedding": current_timestamp_mean,
     }
+
 
 # =============================================================================
 # MAIN PIPELINE
@@ -251,12 +258,9 @@ def run_pipeline(config: dict):
         temperature=config["temperature"],
     ).to(device)
 
-    # Khởi tạo tiêu chuẩn Loss (ELBO + Distillation + Contrastive)
+    # Khởi tạo tiêu chuẩn Loss (ELBO + Contrastive)
     criterion = CoNTMTotalLoss(
-        n_topics=config["n_topics"],
-        llm_doc_dim=embed_dim,
         temperature=config["temperature"],
-        lambda_distill=config["lambda_distill"],
         lambda_contrastive=config["lambda_contrastive"],
         top_n_words=config["top_n_contrastive"],
     ).to(device)
@@ -282,7 +286,7 @@ def run_pipeline(config: dict):
     print(f"{'='*70}")
     print(f"Topics: {config['n_topics']}, Embed dim: {embed_dim}")
     print(f"Temperature: {config['temperature']}")
-    print(f"λ_distill: {config['lambda_distill']}, λ_contrastive: {config['lambda_contrastive']}")
+    print(f"λ_contrastive: {config['lambda_contrastive']}")
     print(f"Buffer size: {config['buffer_size']}, Replay ratio: {config['replay_ratio']}")
     print(f"{'='*70}\n")
 
@@ -318,7 +322,7 @@ def run_pipeline(config: dict):
             train_dataset, 
             batch_size=config["batch_size"], 
             shuffle=True, 
-            drop_last=True  # <--- BẮT BUỘC ĐỂ TRÁNH LỖI BATCHNORM MẪU ĐƠN LẺ KHÔNG TÍNH ĐƯỢC PHƯƠNG SAI
+            drop_last=(len(train_dataset) > config["batch_size"])
         )
 
         # Tiến hành huấn luyện trên timestamp hiện tại
@@ -334,25 +338,40 @@ def run_pipeline(config: dict):
             config=config,
             device=device,
         )
-        prev_mean_embedding = train_info["prev_mean_embedding"]
+
+        # Lấy vector trung bình vừa tính được của cả Timestamp hiện tại
+        current_ts_mean = train_info["timestamp_mean_embedding"]
 
         # ── EMA update of global prior (Target Network style) ──────────────
-        # Done ONCE after the full timestamp training, not inside the batch loop.
-        # rho_star is computed from the final surprise index of this timestamp.
-        last_surprise = train_info["history"][-1]["surprise"] if train_info["history"] else 0.0
-        rho_star = compute_adaptive_lr_scale(
-            step_idx, last_surprise,
-            gamma=config["gamma"], tau_0=config["tau_0"], kappa=config["kappa"]
+        # Tính toán Surprise thật sự giữa Timestamp này và Timestamp trước đó
+        eta_timestamp = compute_surprise_index(
+            current_timestamp_mean=current_ts_mean,
+            previous_timestamp_mean=prev_mean_embedding
         )
-        model.ema_update_global(rho_star)
-        print(f"  EMA global update: ρ*={rho_star:.4f}")
 
-        # Trích xuất phân phối chủ đề (Topics Matrix)
-        beta = model.get_topic_word_dist(word_embeddings_tensor)
-        local_topics = extract_topics(beta, vocab, top_m=config["top_m_words"], source=f"local_T{ts}")
+        # Tính toán rho_star dựa trên Surprise thực tế cấp độ Timestamp
+        rho_star = compute_adaptive_lr_scale(
+            t=step_idx, 
+            eta_timestamp=eta_timestamp,
+            gamma=config["gamma"], 
+            tau_0=config["tau_0"], 
+            kappa=config["kappa"]
+        )
+        
+        # Tiến hành EMA update vào Global Memory dài hạn
+        model.ema_update_global(rho_star)
+        
+        print(f"  EMA global update: η_ts={eta_timestamp:.4f}, ρ*={rho_star:.4f}")
+
+        # Cập nhật vector của timestamp này làm "quá khứ" cho timestamp kế tiếp
+        prev_mean_embedding = current_ts_mean
+
+        # Trích xuất phân phối chủ đề (Topics Matrix) CHỈ LẤY GLOBAL BEHAVIOR
+        beta = model.get_global_topic_word_dist(word_embeddings_tensor)
+        local_topics = extract_topics(beta, vocab, top_m=config["top_m_words"], source=f"global_T{ts}")
         diversity = topic_diversity(local_topics)
 
-        print(f"  Local diversity: {diversity:.4f}")
+        print(f"  Global diversity: {diversity:.4f}")
         print(f"  Best loss: {train_info['best_loss']:.4f}")
         print(f"  Wall time: {time.time() - t_start:.1f}s")
 
@@ -361,21 +380,18 @@ def run_pipeline(config: dict):
         if step_idx == 0:
             global_memory.initialize_from_local(local_topics, beta_logits, ts)
         else:
-            global_memory.topics = []
             global_memory.beta_logits = beta_logits.copy()
-            global_memory._next_id = 0
-            for t in local_topics:
-                from copy import deepcopy
-                new_t = deepcopy(t)
-                new_t.id = global_memory._next_id
-                new_t.source = "global"
-                global_memory.topics.append(new_t)
-                global_memory._next_id += 1
-            
+
             from src.topic_utils import embed_topics_from_beta
-            global_memory.topics = embed_topics_from_beta(
-                global_memory.topics, beta, vocab, config["embedding_model"]
+
+            current_topics = embed_topics_from_beta(
+                local_topics,
+                beta,
+                vocab,
+                config["embedding_model"]
             )
+
+            global_memory.topics = current_topics
 
         # Lưu kết quả checkpoint của mốc thời gian này
         ts_dir = output_dir / f"T{ts}"
@@ -458,8 +474,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--lr", type=float, default=0.002)
-    parser.add_argument("--temperature", type=float, default=0.1)
-    parser.add_argument("--lambda-distill", type=float, default=1.0)
+    parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--lambda-contrastive", type=float, default=0.5)
     parser.add_argument("--buffer-size", type=int, default=500)
     parser.add_argument("--device", default=None)
@@ -473,7 +488,6 @@ def main():
     config["batch_size"] = args.batch_size
     config["lr"] = args.lr
     config["temperature"] = args.temperature
-    config["lambda_distill"] = args.lambda_distill
     config["lambda_contrastive"] = args.lambda_contrastive
     config["buffer_size"] = args.buffer_size
 
